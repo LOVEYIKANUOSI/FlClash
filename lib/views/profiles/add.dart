@@ -54,6 +54,7 @@ class AddProfileView extends StatelessWidget {
     }
   }
 
+
   @override
   Widget build(context) {
     return ListView(
