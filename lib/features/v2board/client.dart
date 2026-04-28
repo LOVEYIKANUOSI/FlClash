@@ -65,13 +65,17 @@ class V2BoardClient {
     required int planId,
     required String period,
   }) async {
-    final response = await _dio.post<dynamic>(
-      _buildUrl(baseUrl, '/api/v1/user/order/save'),
-      data: {'plan_id': planId, 'period': period},
-      options: Options(headers: {'Authorization': authData}),
-    );
-    print('[V2Board] createOrder status=${response.statusCode} body=${response.data}');
-    return _requireDataMap(response, fallbackMessage: '下单失败');
+    try {
+      final response = await _dio.post<dynamic>(
+        _buildUrl(baseUrl, '/api/v1/user/order/save'),
+        data: {'plan_id': planId, 'period': period},
+        options: Options(headers: {'Authorization': authData}),
+      );
+      return _requireDataMap(response, fallbackMessage: '下单失败');
+    } on DioException catch (e) {
+      final msg = _extractErrorMessage(e.response?.data);
+      throw msg;
+    }
   }
 
   String _normalizeBaseUrl(String value) {
