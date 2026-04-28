@@ -58,24 +58,109 @@ class V2BoardClient {
     return [];
   }
 
-  // ==== 新增方法：创建订单 ====
+  // ==== 新增方法：创建订单（自动取消旧订单） ====
   Future<Map<String, dynamic>> createOrder(
     String baseUrl,
     String authData, {
     required int planId,
     required String period,
   }) async {
+    // 先获取未支付订单并取消
+    try {
+      final orders = await fetchOrders(baseUrl, authData);
+      for (final o in orders) {
+        final status = o['status'];
+        final tradeNo = o['trade_no']?.toString();
+        if (status == 0 && tradeNo != null && tradeNo.isNotEmpty) {
+          try {
+            await cancelOrder(baseUrl, authData, tradeNo);
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    // 下单
     try {
       final response = await _dio.post<dynamic>(
         _buildUrl(baseUrl, '/api/v1/user/order/save'),
         data: {'plan_id': planId, 'period': period},
         options: Options(headers: {'Authorization': authData}),
       );
-      return _requireDataMap(response, fallbackMessage: '下单失败');
+      // v2board save 返回 { data: "trade_no" }（字符串），不是 Map
+      final body = response.data;
+      if (body is Map) {
+        final d = body['data'];
+        if (d is String) return {'data': d};
+        if (d is Map) return d as Map<String, dynamic>;
+      }
+      throw '下单返回格式异常';
     } on DioException catch (e) {
       final msg = _extractErrorMessage(e.response?.data);
       throw msg;
     }
+  }
+
+  // ==== 获取订单列表 ====
+  Future<List<Map<String, dynamic>>> fetchOrders(
+    String baseUrl,
+    String authData,
+  ) async {
+    final response = await _dio.get<dynamic>(
+      _buildUrl(baseUrl, '/api/v1/user/order/fetch'),
+      options: Options(headers: {'Authorization': authData}),
+    );
+    final body = response.data;
+    if (body is Map && body['data'] is List) {
+      return (body['data'] as List).cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
+
+  // ==== 取消订单 ====
+  Future<void> cancelOrder(
+    String baseUrl,
+    String authData,
+    String tradeNo,
+  ) async {
+    final response = await _dio.post<dynamic>(
+      _buildUrl(baseUrl, '/api/v1/user/order/cancel'),
+      data: {'trade_no': tradeNo},
+      options: Options(headers: {'Authorization': authData}),
+    );
+    final body = response.data;
+    if (body is Map && body['data'] == true) return;
+    // 有些版本返回格式不同，忽略解析错误
+  }
+
+  // ==== 获取支付方式 ====
+  Future<List<Map<String, dynamic>>> getPaymentMethods(
+    String baseUrl,
+    String authData,
+  ) async {
+    final response = await _dio.get<dynamic>(
+      _buildUrl(baseUrl, '/api/v1/user/order/getPaymentMethod'),
+      options: Options(headers: {'Authorization': authData}),
+    );
+    final body = response.data;
+    if (body is Map && body['data'] is List) {
+      return (body['data'] as List).cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
+
+  // ==== 结算/获取支付链接 ====
+  Future<Map<String, dynamic>> checkout(
+    String baseUrl,
+    String authData, {
+    required String tradeNo,
+    required int method,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      _buildUrl(baseUrl, '/api/v1/user/order/checkout'),
+      data: {'trade_no': tradeNo, 'method': method},
+      options: Options(headers: {'Authorization': authData}),
+    );
+    return _requireDataMap(response, fallbackMessage: '获取支付信息失败');
   }
 
   String _normalizeBaseUrl(String value) {

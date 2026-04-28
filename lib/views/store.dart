@@ -149,12 +149,15 @@ class _PlanCardState extends State<_PlanCard> {
   Future<void> _handleBuy() async {
     final periods = _availablePeriods();
     if (periods.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('该套餐暂无可用周期')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('该套餐暂无可用周期')),
+        );
+      }
       return;
     }
 
+    // 1. 选择周期
     final selected = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -179,38 +182,158 @@ class _PlanCardState extends State<_PlanCard> {
         }).toList(),
       ),
     );
+    if (selected == null || !mounted) return;
 
-    if (selected == null || !context.mounted) return;
+    // 2. 创建订单（自动取消旧订单）
+    final authStore = AuthStore();
+    await authStore.init();
+    final baseUrl = authStore.panelUrl;
+    final authData = authStore.authData;
 
-    try {
-      final authStore = AuthStore();
-      await authStore.init();
-      final baseUrl = authStore.panelUrl;
-      final authData = authStore.authData;
-
-      if (baseUrl == null || authData == null) {
+    if (baseUrl == null || authData == null) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('请先登录')),
         );
-        return;
       }
+      return;
+    }
 
+    // 显示加载
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(children: [
+            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 12),
+            Text('正在下单...'),
+          ]),
+          duration: Duration(seconds: 30),
+        ),
+      );
+    }
+
+    String? tradeNo;
+    try {
       final order = await v2BoardClient.createOrder(
         baseUrl,
         authData,
         planId: plan['id'],
         period: selected,
       );
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('下单成功: ${order['trade_no'] ?? ''}')),
-        );
-      }
+      tradeNo = order['data']?.toString() ?? '';
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('下单失败: $e')),
+        );
+      }
+      return;
+    }
+
+    if (tradeNo.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('下单失败: 未知错误')),
+        );
+      }
+      return;
+    }
+
+    // 3. 获取支付方式
+    List<Map<String, dynamic>> methods;
+    try {
+      methods = await v2BoardClient.getPaymentMethods(baseUrl, authData);
+    } catch (_) {
+      methods = [];
+    }
+
+    // 4. 选择支付方式
+    if (methods.isEmpty) {
+      // 无支付方式，可能免费或直接完成
+      try {
+        final result = await v2BoardClient.checkout(
+          baseUrl, authData,
+          tradeNo: tradeNo, method: 0,
+        );
+        final type = result['type'];
+        if (type == -1) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('购买成功！')),
+            );
+          }
+        }
+      } catch (_) {}
+      return;
+    }
+
+    if (!mounted) return;
+    final methodId = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('选择支付方式'),
+        children: methods.map((m) {
+          return SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, m['id']),
+            child: Row(
+              children: [
+                if (m['icon'] != null) ...[
+                  Image.network(m['icon'], width: 24, height: 24, errorBuilder: (_, __, ___) => Icon(Icons.payment, size: 24)),
+                  SizedBox(width: 12),
+                ],
+                Text(m['name'] ?? ''),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+
+    if (methodId == null || !mounted) return;
+
+    // 5. 获取支付链接
+    try {
+      final result = await v2BoardClient.checkout(
+        baseUrl, authData,
+        tradeNo: tradeNo, method: methodId,
+      );
+      final type = result['type'];
+      final data = result['data'];
+
+      if (mounted) {
+        if (type == -1) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('购买成功！')),
+          );
+        } else if (type == 0 && data is String && data.isNotEmpty) {
+          // 支付链接或二维码
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('请完成支付'),
+              content: SelectableText(data),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('关闭'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('支付信息: $data')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('获取支付信息失败: $e')),
         );
       }
     }
