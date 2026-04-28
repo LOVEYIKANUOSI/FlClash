@@ -49,6 +49,11 @@ class Navigation {
         builder: (_) =>
             const ProfilesView(key: GlobalObjectKey(PageLabel.profiles)),
       ),
+      NavigationItem(
+        icon: const Icon(Icons.storefront),
+        label: PageLabel.store,
+        builder: (_) => const StoreView(key: GlobalObjectKey(PageLabel.store)),
+      ),
       if (showHidden)
         NavigationItem(
           icon: Icon(Icons.view_timeline),
