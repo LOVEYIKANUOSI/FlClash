@@ -195,7 +195,7 @@ class _DashboardViewState extends ConsumerState<DashboardView>
   Widget _buildBottomSection() {
     return Container(
       margin: EdgeInsets.fromLTRB(16, 0, 16, 16),
-      padding: EdgeInsets.all(12),
+      padding: EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
@@ -203,17 +203,14 @@ class _DashboardViewState extends ConsumerState<DashboardView>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 出站模式选择
           _OutboundModeSelector(),
-          SizedBox(height: 12),
+          SizedBox(height: 8),
           Divider(height: 1),
-          SizedBox(height: 12),
-          // 代理模式
+          SizedBox(height: 8),
           _ProxyModeSelector(),
-          SizedBox(height: 12),
+          SizedBox(height: 8),
           Divider(height: 1),
-          SizedBox(height: 12),
-          // 流量统计
+          SizedBox(height: 8),
           _TrafficStats(),
         ],
       ),
@@ -371,28 +368,28 @@ class _OutboundModeSelector extends StatelessWidget {
             final isSelected = m == mode;
             return Expanded(
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
+                padding: EdgeInsets.symmetric(horizontal: 2),
                 child: Material(
                   color: isSelected
                       ? Theme.of(context).colorScheme.primaryContainer
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                   child: InkWell(
                     onTap: () => appController.changeMode(m),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                     child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
+                      padding: EdgeInsets.symmetric(vertical: 4),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
                             _modeIcon(m),
-                            size: 18,
+                            size: 14,
                             color: isSelected
                                 ? Theme.of(context).colorScheme.onPrimaryContainer
                                 : Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
-                          SizedBox(height: 2),
+                          SizedBox(height: 1),
                           Text(
                             Intl.message(m.name),
                             style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -400,6 +397,7 @@ class _OutboundModeSelector extends StatelessWidget {
                                       ? Theme.of(context).colorScheme.onPrimaryContainer
                                       : Theme.of(context).colorScheme.onSurfaceVariant,
                                   fontWeight: isSelected ? FontWeight.w600 : null,
+                                  fontSize: 11,
                                 ),
                           ),
                         ],
@@ -481,26 +479,26 @@ class _TrafficStatItem extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 8,
-              height: 8,
+              width: 6,
+              height: 6,
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
               ),
             ),
-            SizedBox(width: 6),
+            SizedBox(width: 4),
             Text(
               label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
           ],
         ),
-        SizedBox(height: 4),
+        SizedBox(height: 2),
         Text(
           '${value.traffic.value} ${value.traffic.unit}',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: Theme.of(context).colorScheme.onSurface,
               ),
@@ -537,7 +535,7 @@ class _ProxyModeSelector extends StatelessWidget {
                 },
               ),
             ),
-            SizedBox(width: 8),
+            SizedBox(width: 6),
             Expanded(
               child: _ToggleChip(
                 icon: Icons.shuffle,
@@ -577,23 +575,23 @@ class _ToggleChip extends StatelessWidget {
       color: value
           ? Theme.of(context).colorScheme.primaryContainer
           : Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(6),
       child: InkWell(
         onTap: () => onChanged(!value),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 icon,
-                size: 16,
+                size: 14,
                 color: value
                     ? Theme.of(context).colorScheme.onPrimaryContainer
                     : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-              SizedBox(width: 6),
+              SizedBox(width: 4),
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -601,6 +599,7 @@ class _ToggleChip extends StatelessWidget {
                           ? Theme.of(context).colorScheme.onPrimaryContainer
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontWeight: value ? FontWeight.w600 : null,
+                      fontSize: 11,
                     ),
               ),
             ],
