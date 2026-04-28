@@ -15,6 +15,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'controller.dart';
+import 'features/v2board/auth_store.dart';
+import 'features/v2board/client.dart';
+import 'features/v2board/login_page.dart';
 import 'pages/pages.dart';
 
 class Application extends ConsumerStatefulWidget {
@@ -48,12 +51,46 @@ class ApplicationState extends ConsumerState<Application> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
+      // 先 attach——管理器（CoreManager 等）依赖 appController._ref
       final currentContext = globalState.navigatorKey.currentContext;
       if (currentContext != null) {
         await appController.attach(currentContext, ref);
       } else {
         exit(0);
       }
+
+      // ===== 登录检查 =====
+      final authStore = AuthStore();
+      await authStore.init();
+
+      if (authStore.hasSession) {
+        final valid = await v2BoardClient.checkLogin(
+          authStore.panelUrl!,
+          authStore.authData!,
+        );
+        if (!valid) {
+          await authStore.clear();
+        }
+      }
+
+      if (!authStore.hasSession) {
+        final ctx = globalState.navigatorKey.currentContext;
+        if (ctx != null) {
+          await Navigator.of(ctx).push(
+            MaterialPageRoute(
+              builder: (_) => LoginPage(authStore: authStore),
+            ),
+          );
+        }
+      }
+
+      // 登录成功后导入订阅
+      final subUrl = authStore.subscribeUrl;
+      if (subUrl != null && subUrl.isNotEmpty) {
+        appController.addProfileFormURL(subUrl);
+      }
+      // ===== 登录检查结束 =====
+
       _autoUpdateProfilesTask();
       appController.initLink();
       app?.initShortcuts();

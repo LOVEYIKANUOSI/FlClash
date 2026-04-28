@@ -24,6 +24,24 @@ class V2BoardClient {
     ),
   );
 
+  // ==== 新增字段（登录门控需要）====
+  String? lastAuthData;
+  String? lastToken;
+
+  // ==== 新增方法：验证登录态 ====
+  Future<bool> checkLogin(String baseUrl, String authData) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        _buildUrl(baseUrl, '/api/v1/user/checkLogin'),
+        options: Options(headers: {'Authorization': authData}),
+      );
+      final data = _requireDataMap(response, fallbackMessage: '检查登录状态失败');
+      return data['is_login'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   String _normalizeBaseUrl(String value) {
     final baseUrl = value.trim();
     if (!baseUrl.isUrl) {
@@ -85,12 +103,16 @@ class V2BoardClient {
         'password': credentials.password,
       },
     );
+    print('[V2Board] login status=${loginResponse.statusCode} body=${loginResponse.data}');
     final loginData = _requireDataMap(loginResponse, fallbackMessage: '登录失败');
     final authData = loginData['auth_data']?.toString();
     final token = loginData['token']?.toString();
     if (authData == null || authData.isEmpty) {
       throw '登录失败：未获取到 auth_data';
     }
+    // ==== 新增：保存认证数据 ====
+    lastAuthData = authData;
+    lastToken = token;
 
     final subscribeResponse = await _dio.get<dynamic>(
       _buildUrl(credentials.baseUrl, '/api/v1/user/getSubscribe'),
