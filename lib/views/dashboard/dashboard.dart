@@ -208,6 +208,11 @@ class _DashboardViewState extends ConsumerState<DashboardView>
           SizedBox(height: 12),
           Divider(height: 1),
           SizedBox(height: 12),
+          // 代理模式
+          _ProxyModeSelector(),
+          SizedBox(height: 12),
+          Divider(height: 1),
+          SizedBox(height: 12),
           // 流量统计
           _TrafficStats(),
         ],
@@ -501,6 +506,107 @@ class _TrafficStatItem extends StatelessWidget {
               ),
         ),
       ],
+    );
+  }
+}
+
+/// 代理模式选择（TUN / 系统代理）
+class _ProxyModeSelector extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Consumer(
+      builder: (_, ref, _) {
+        final tunEnabled = ref.watch(
+          patchClashConfigProvider.select((state) => state.tun.enable),
+        );
+        final systemProxy = ref.watch(
+          networkSettingProvider.select((state) => state.systemProxy),
+        );
+
+        return Row(
+          children: [
+            Expanded(
+              child: _ToggleChip(
+                icon: Icons.stacked_line_chart,
+                label: appLocalizations.tun,
+                value: tunEnabled,
+                onChanged: (v) {
+                  ref.read(patchClashConfigProvider.notifier).update(
+                    (state) => state.copyWith.tun(enable: v),
+                  );
+                },
+              ),
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: _ToggleChip(
+                icon: Icons.shuffle,
+                label: appLocalizations.systemProxy,
+                value: systemProxy,
+                onChanged: (v) {
+                  ref.read(networkSettingProvider.notifier).update(
+                    (state) => state.copyWith(systemProxy: v),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 切换按钮
+class _ToggleChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ToggleChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: value
+          ? Theme.of(context).colorScheme.primaryContainer
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: value
+                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              SizedBox(width: 6),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: value
+                          ? Theme.of(context).colorScheme.onPrimaryContainer
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: value ? FontWeight.w600 : null,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
