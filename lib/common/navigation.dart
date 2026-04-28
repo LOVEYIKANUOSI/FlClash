@@ -43,6 +43,9 @@ class Navigation {
       NavigationItem(
         icon: Icon(Icons.folder),
         label: PageLabel.profiles,
+        modes: showHidden
+            ? [NavigationItemMode.mobile, NavigationItemMode.desktop]
+            : [],
         builder: (_) =>
             const ProfilesView(key: GlobalObjectKey(PageLabel.profiles)),
       ),
