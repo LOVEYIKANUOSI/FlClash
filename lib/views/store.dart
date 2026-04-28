@@ -107,46 +107,114 @@ class _PlanCard extends StatelessWidget {
   final Map<String, dynamic> plan;
   const _PlanCard({required this.plan});
 
-  String _formatTraffic(dynamic bytes) {
-    final b = (bytes is int) ? bytes : int.tryParse('$bytes') ?? 0;
-    if (b <= 0) return '无限制';
-    final gb = b / 1073741824;
-    return '${gb.toStringAsFixed(0)} GiB';
+  String _formatTraffic(dynamic val) {
+    final v = (val is int) ? val : int.tryParse('$val') ?? 0;
+    if (v <= 0) return '无限制';
+    return '$v GB';
   }
 
   String _priceText(dynamic price) {
-    if (price == null) return '——';
-    final p = (price is num) ? price / 100 : 0;
+    if (price == null || price == 0) return '';
+    final p = (price is num) ? price / 100.0 : 0;
     return '¥${p.toStringAsFixed(2)}';
   }
 
-  Widget _buildPriceRow() {
-    final labels = {
+  List<MapEntry<String, String>> _availablePeriods() {
+    final all = {
       'month_price': '月付',
       'quarter_price': '季付',
       'half_year_price': '半年',
       'year_price': '年付',
+      'two_year_price': '两年',
+      'three_year_price': '三年',
+      'onetime_price': '一次性',
     };
-    return Wrap(
-      spacing: 12,
-      runSpacing: 4,
-      children: labels.entries
-          .where((e) => plan[e.key] != null && plan[e.key] > 0)
-          .map((e) => Text(
-                '${e.value} ${_priceText(plan[e.key])}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ))
-          .toList(),
+    return all.entries
+        .where((e) {
+          final v = plan[e.key];
+          return v != null && v is num && v > 0;
+        })
+        .toList();
+  }
+
+  Future<void> _handleBuy(BuildContext context) async {
+    final periods = _availablePeriods();
+    if (periods.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('该套餐暂无可用周期')),
+      );
+      return;
+    }
+
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('选择购买周期'),
+        children: periods.map((e) {
+          return SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, e.key),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(e.value),
+                Text(
+                  _priceText(plan[e.key]),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
     );
+
+    if (selected == null || !context.mounted) return;
+
+    try {
+      final authStore = AuthStore();
+      await authStore.init();
+      final baseUrl = authStore.panelUrl;
+      final authData = authStore.authData;
+
+      if (baseUrl == null || authData == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请先登录')),
+        );
+        return;
+      }
+
+      final order = await v2BoardClient.createOrder(
+        baseUrl,
+        authData,
+        planId: plan['id'],
+        period: selected,
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('下单成功: ${order['trade_no'] ?? ''}')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('下单失败: $e')),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = plan['name'] ?? 'Unknown';
+    final name = plan['name'] ?? '';
     final traffic = plan['transfer_enable'];
     final deviceLimit = plan['device_limit'];
     final speedLimit = plan['speed_limit'];
     final monthPrice = plan['month_price'];
+    final content = plan['content'] as String?;
 
     return Card(
       margin: EdgeInsets.only(bottom: 12),
@@ -167,7 +235,7 @@ class _PlanCard extends StatelessWidget {
                         ),
                   ),
                 ),
-                if (monthPrice != null)
+                if (monthPrice != null && monthPrice > 0)
                   Text(
                     _priceText(monthPrice) + '/月',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -178,28 +246,46 @@ class _PlanCard extends StatelessWidget {
               ],
             ),
             SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
               children: [
                 _InfoChip(icon: Icons.data_usage, label: _formatTraffic(traffic)),
-                SizedBox(width: 12),
                 if (deviceLimit != null && deviceLimit > 0)
                   _InfoChip(icon: Icons.devices, label: '$deviceLimit 设备'),
-                if (speedLimit != null && speedLimit > 0) ...[
-                  SizedBox(width: 12),
-                  _InfoChip(
-                    icon: Icons.speed,
-                    label: '${(speedLimit / 1048576).toStringAsFixed(0)} Mbps',
-                  ),
-                ],
+                if (deviceLimit == null)
+                  _InfoChip(icon: Icons.devices, label: '无限设备'),
+                if (speedLimit != null && speedLimit > 0)
+                  _InfoChip(icon: Icons.speed, label: '$speedLimit Mbps'),
+                if (speedLimit == null)
+                  _InfoChip(icon: Icons.speed, label: '不限速'),
               ],
             ),
+            if (content != null && content.isNotEmpty) ...[
+              SizedBox(height: 8),
+              Text(
+                content.replaceAll(RegExp(r'<[^>]*>'), '').trim(),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
+            ],
             SizedBox(height: 8),
-            _buildPriceRow(),
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              children: _availablePeriods()
+                  .map((e) => Text(
+                        '${e.value} ${_priceText(plan[e.key])}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ))
+                  .toList(),
+            ),
             SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () {},
+                onPressed: () => _handleBuy(context),
                 child: const Text('购买'),
               ),
             ),

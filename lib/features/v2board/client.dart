@@ -51,10 +51,10 @@ class V2BoardClient {
       _buildUrl(baseUrl, '/api/v1/user/plan/fetch'),
       options: Options(headers: {'Authorization': authData}),
     );
-    final data = _requireDataMap(response, fallbackMessage: '获取套餐列表失败');
-    if (data is List) return data.cast<Map<String, dynamic>>();
-    final list = data['list'];
-    if (list is List) return list.cast<Map<String, dynamic>>();
+    final body = response.data;
+    if (body is Map && body['data'] is List) {
+      return (body['data'] as List).cast<Map<String, dynamic>>();
+    }
     return [];
   }
 
