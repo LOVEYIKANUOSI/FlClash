@@ -8,6 +8,7 @@ import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/manager/hotkey_manager.dart';
 import 'package:fl_clash/manager/manager.dart';
 import 'package:fl_clash/plugins/app.dart';
+import 'package:fl_clash/providers/database.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:flutter/material.dart';
@@ -84,10 +85,27 @@ class ApplicationState extends ConsumerState<Application> {
         }
       }
 
-      // 登录成功后导入订阅
+      // 登录成功后导入/更新订阅
       final subUrl = authStore.subscribeUrl;
       if (subUrl != null && subUrl.isNotEmpty) {
-        appController.addProfileFormURL(subUrl);
+        final profiles = ref.read(profilesProvider);
+        Profile? existing;
+        for (final p in profiles) {
+          if (p.url == subUrl) {
+            existing = p;
+            break;
+          }
+        }
+        if (existing != null) {
+          try {
+            await appController.updateProfile(existing, showLoading: false);
+          } catch (_) {
+            ref.read(profilesProvider.notifier).del(existing.id);
+            appController.addProfileFormURL(subUrl);
+          }
+        } else {
+          appController.addProfileFormURL(subUrl);
+        }
       }
       // ===== 登录检查结束 =====
 
