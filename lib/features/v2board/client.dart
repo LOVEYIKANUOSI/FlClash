@@ -70,6 +70,7 @@ class V2BoardClient {
       data: {'plan_id': planId, 'period': period},
       options: Options(headers: {'Authorization': authData}),
     );
+    print('[V2Board] createOrder status=${response.statusCode} body=${response.data}');
     return _requireDataMap(response, fallbackMessage: '下单失败');
   }
 

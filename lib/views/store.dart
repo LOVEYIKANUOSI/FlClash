@@ -103,9 +103,18 @@ class _StoreViewState extends ConsumerState<StoreView> {
   }
 }
 
-class _PlanCard extends StatelessWidget {
+class _PlanCard extends StatefulWidget {
   final Map<String, dynamic> plan;
   const _PlanCard({required this.plan});
+
+  @override
+  State<_PlanCard> createState() => _PlanCardState();
+}
+
+class _PlanCardState extends State<_PlanCard> {
+  bool _expanded = false;
+
+  Map<String, dynamic> get plan => widget.plan;
 
   String _formatTraffic(dynamic val) {
     final v = (val is int) ? val : int.tryParse('$val') ?? 0;
@@ -137,7 +146,7 @@ class _PlanCard extends StatelessWidget {
         .toList();
   }
 
-  Future<void> _handleBuy(BuildContext context) async {
+  Future<void> _handleBuy() async {
     final periods = _availablePeriods();
     if (periods.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -215,6 +224,7 @@ class _PlanCard extends StatelessWidget {
     final speedLimit = plan['speed_limit'];
     final monthPrice = plan['month_price'];
     final content = plan['content'] as String?;
+    final cleanContent = content?.replaceAll(RegExp(r'<[^>]*>'), '').trim() ?? '';
 
     return Card(
       margin: EdgeInsets.only(bottom: 12),
@@ -253,21 +263,28 @@ class _PlanCard extends StatelessWidget {
                 _InfoChip(icon: Icons.data_usage, label: _formatTraffic(traffic)),
                 if (deviceLimit != null && deviceLimit > 0)
                   _InfoChip(icon: Icons.devices, label: '$deviceLimit 设备'),
-                if (deviceLimit == null)
+                if (deviceLimit == null || deviceLimit == 0)
                   _InfoChip(icon: Icons.devices, label: '无限设备'),
                 if (speedLimit != null && speedLimit > 0)
                   _InfoChip(icon: Icons.speed, label: '$speedLimit Mbps'),
-                if (speedLimit == null)
+                if (speedLimit == null || speedLimit == 0)
                   _InfoChip(icon: Icons.speed, label: '不限速'),
               ],
             ),
-            if (content != null && content.isNotEmpty) ...[
+            if (cleanContent.isNotEmpty) ...[
               SizedBox(height: 8),
               Text(
-                content.replaceAll(RegExp(r'<[^>]*>'), '').trim(),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                cleanContent,
+                maxLines: _expanded ? null : 2,
+                overflow: _expanded ? null : TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Text(
+                  _expanded ? '收起' : '展开详情',
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary),
+                ),
               ),
             ],
             SizedBox(height: 8),
@@ -285,7 +302,7 @@ class _PlanCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () => _handleBuy(context),
+                onPressed: _handleBuy,
                 child: const Text('购买'),
               ),
             ),
