@@ -13,16 +13,17 @@ class StoreView extends ConsumerStatefulWidget {
 
 class _StoreViewState extends ConsumerState<StoreView> {
   List<Map<String, dynamic>> _plans = [];
+  Map<String, dynamic>? _userInfo;
   bool _loading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadPlans();
+    _loadData();
   }
 
-  Future<void> _loadPlans() async {
+  Future<void> _loadData() async {
     try {
       final authStore = AuthStore();
       await authStore.init();
@@ -37,10 +38,14 @@ class _StoreViewState extends ConsumerState<StoreView> {
         return;
       }
 
-      final plans = await v2BoardClient.fetchPlans(baseUrl, authData);
+      final results = await Future.wait([
+        v2BoardClient.fetchPlans(baseUrl, authData),
+        v2BoardClient.getUserInfo(baseUrl, authData),
+      ]);
       if (mounted) {
         setState(() {
-          _plans = plans;
+          _plans = results[0];
+          _userInfo = results[1];
           _loading = false;
         });
       }
@@ -50,6 +55,60 @@ class _StoreViewState extends ConsumerState<StoreView> {
           _error = e.toString();
           _loading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _resetTraffic() async {
+    final userInfo = _userInfo;
+    if (userInfo == null) return;
+    final plan = userInfo['plan'];
+    if (plan == null) return;
+
+    final resetPrice = plan['reset_price'];
+    if (resetPrice == null || resetPrice == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('当前套餐不支持流量重置')),
+        );
+      }
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重置流量'),
+        content: Text('确定要重置流量吗？费用：¥${(resetPrice / 100).toStringAsFixed(2)}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确定')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final authStore = AuthStore();
+    await authStore.init();
+
+    try {
+      final order = await v2BoardClient.createOrder(
+        authStore.panelUrl!,
+        authStore.authData!,
+        planId: plan['id'],
+        period: 'reset_price',
+      );
+      final tradeNo = order['data']?.toString() ?? '';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('重置订单已创建: $tradeNo\n请在订单页面完成支付')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('重置失败: $e')),
+        );
       }
     }
   }
@@ -78,19 +137,7 @@ class _StoreViewState extends ConsumerState<StoreView> {
             SizedBox(height: 12),
             Text(_error!, style: TextStyle(color: Colors.grey)),
             SizedBox(height: 16),
-            OutlinedButton(onPressed: _loadPlans, child: const Text('重试')),
-          ],
-        ),
-      );
-    }
-    if (_plans.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.storefront, size: 48, color: Colors.grey),
-            SizedBox(height: 12),
-            Text('暂无可用套餐', style: TextStyle(color: Colors.grey)),
+            OutlinedButton(onPressed: _loadData, child: const Text('重试')),
           ],
         ),
       );
@@ -98,8 +145,17 @@ class _StoreViewState extends ConsumerState<StoreView> {
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _plans.length,
-      itemBuilder: (_, index) => _PlanCard(plan: _plans[index]),
+      itemCount: _plans.length + (_userInfo != null ? 1 : 0),
+      itemBuilder: (_, index) {
+        if (_userInfo != null && index == 0) {
+          return _SubscriptionBanner(
+            userInfo: _userInfo!,
+            onReset: _resetTraffic,
+          );
+        }
+        final planIndex = _userInfo != null ? index - 1 : index;
+        return _PlanCard(plan: _plans[planIndex]);
+      },
     );
   }
 }
@@ -456,6 +512,83 @@ class _InfoChip extends StatelessWidget {
         SizedBox(width: 4),
         Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
+    );
+  }
+}
+
+/// 当前订阅信息 + 重置流量
+class _SubscriptionBanner extends StatelessWidget {
+  final Map<String, dynamic> userInfo;
+  final VoidCallback onReset;
+
+  const _SubscriptionBanner({required this.userInfo, required this.onReset});
+
+  String _formatBytes(dynamic val) {
+    final v = (val is int) ? val : int.tryParse('$val') ?? 0;
+    if (v <= 0) return '0 GB';
+    return '${(v / 1073741824).toStringAsFixed(1)} GB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final plan = userInfo['plan'] as Map<String, dynamic>?;
+    final planName = plan?['name'] ?? '无订阅';
+    final total = userInfo['transfer_enable'] ?? 0;
+    final used = (userInfo['u'] ?? 0) + (userInfo['d'] ?? 0);
+    final progress = (total > 0) ? ((used as num) / (total as num)).clamp(0.0, 1.0) : 0.0;
+    final resetPrice = plan?['reset_price'];
+    final expiredAt = userInfo['expired_at'];
+
+    return Card(
+      margin: EdgeInsets.only(bottom: 16),
+      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('当前订阅: $planName',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                if (resetPrice != null && resetPrice > 0)
+                  OutlinedButton.icon(
+                    onPressed: onReset,
+                    icon: Icon(Icons.refresh, size: 16),
+                    label: Text('重置流量', style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      minimumSize: Size.zero,
+                    ),
+                  ),
+              ],
+            ),
+            SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(3),
+              backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+            ),
+            SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('${_formatBytes(used)} / ${_formatBytes(total)}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+                if (expiredAt != null && expiredAt > 0)
+                  Text('到期: ${DateTime.fromMillisecondsSinceEpoch(expiredAt * 1000).toString().substring(0, 10)}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

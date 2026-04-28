@@ -148,6 +148,26 @@ class V2BoardClient {
     return [];
   }
 
+  // ==== 获取用户订阅信息 ====
+  Future<Map<String, dynamic>?> getUserInfo(
+    String baseUrl,
+    String authData,
+  ) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        _buildUrl(baseUrl, '/api/v1/user/getSubscribe'),
+        options: Options(headers: {'Authorization': authData}),
+      );
+      final body = response.data;
+      if (body is Map && body['data'] is Map) {
+        return Map<String, dynamic>.from(body['data'] as Map);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ==== 结算/获取支付链接 ====
   Future<Map<String, dynamic>> checkout(
     String baseUrl,
@@ -162,8 +182,9 @@ class V2BoardClient {
     );
     final body = response.data;
     if (body is Map) {
-      // 有些版本返回 { data: { type, data } }，有些直接 { type, data }
-      final result = (body['data'] is Map) ? body['data'] as Map<String, dynamic> : body;
+      final result = (body['data'] is Map)
+          ? Map<String, dynamic>.from(body['data'] as Map)
+          : Map<String, dynamic>.from(body);
       return result;
     }
     throw '获取支付信息失败';
