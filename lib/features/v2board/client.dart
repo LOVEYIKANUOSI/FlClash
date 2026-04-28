@@ -42,6 +42,37 @@ class V2BoardClient {
     }
   }
 
+  // ==== 新增方法：获取套餐列表 ====
+  Future<List<Map<String, dynamic>>> fetchPlans(
+    String baseUrl,
+    String authData,
+  ) async {
+    final response = await _dio.get<dynamic>(
+      _buildUrl(baseUrl, '/api/v1/user/plan/fetch'),
+      options: Options(headers: {'Authorization': authData}),
+    );
+    final data = _requireDataMap(response, fallbackMessage: '获取套餐列表失败');
+    if (data is List) return data.cast<Map<String, dynamic>>();
+    final list = data['list'];
+    if (list is List) return list.cast<Map<String, dynamic>>();
+    return [];
+  }
+
+  // ==== 新增方法：创建订单 ====
+  Future<Map<String, dynamic>> createOrder(
+    String baseUrl,
+    String authData, {
+    required int planId,
+    required String period,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      _buildUrl(baseUrl, '/api/v1/user/order/save'),
+      data: {'plan_id': planId, 'period': period},
+      options: Options(headers: {'Authorization': authData}),
+    );
+    return _requireDataMap(response, fallbackMessage: '下单失败');
+  }
+
   String _normalizeBaseUrl(String value) {
     final baseUrl = value.trim();
     if (!baseUrl.isUrl) {
