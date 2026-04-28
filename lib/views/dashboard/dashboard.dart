@@ -1,18 +1,17 @@
 import 'dart:math';
 
-import 'package:defer_pointer/defer_pointer.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/controller.dart';
 import 'package:fl_clash/enum/enum.dart';
+import 'package:fl_clash/models/models.dart';
+import 'package:fl_clash/providers/config.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
+import 'package:fl_clash/views/dashboard/widgets/start_button.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'widgets/start_button.dart';
-
-typedef _IsEditWidgetBuilder = Widget Function(bool isEdit);
+import 'package:intl/intl.dart';
 
 class DashboardView extends ConsumerStatefulWidget {
   const DashboardView({super.key});
@@ -21,367 +20,480 @@ class DashboardView extends ConsumerStatefulWidget {
   ConsumerState<DashboardView> createState() => _DashboardViewState();
 }
 
-class _DashboardViewState extends ConsumerState<DashboardView> {
-  final key = GlobalKey<SuperGridState>();
-  final _isEditNotifier = ValueNotifier<bool>(false);
-  final _addedWidgetsNotifier = ValueNotifier<List<GridItem>>([]);
+class _DashboardViewState extends ConsumerState<DashboardView>
+    with SingleTickerProviderStateMixin {
+  AnimationController? _bgController;
 
-  @override
-  dispose() {
-    _isEditNotifier.dispose();
-    _addedWidgetsNotifier.dispose();
-    super.dispose();
-  }
-
-  Widget _buildIsEdit(_IsEditWidgetBuilder builder) {
-    return ValueListenableBuilder(
-      valueListenable: _isEditNotifier,
-      builder: (_, isEdit, _) {
-        return builder(isEdit);
-      },
-    );
-  }
-
-  Future<void> _handleConnection() async {
-    final coreStatus = ref.read(coreStatusProvider);
-    if (coreStatus == CoreStatus.connecting) {
-      return;
-    }
-    final tip = coreStatus == CoreStatus.connected
-        ? appLocalizations.forceRestartCoreTip
-        : appLocalizations.restartCoreTip;
-    final res = await globalState.showMessage(message: TextSpan(text: tip));
-    if (res != true) {
-      return;
-    }
-    appController.restartCore();
-  }
-
-  List<Widget> _buildActions(bool isEdit) {
-    return [
-      if (!isEdit)
-        Consumer(
-          builder: (_, ref, _) {
-            final coreStatus = ref.watch(coreStatusProvider);
-            return Tooltip(
-              message: appLocalizations.coreStatus,
-              child: FadeScaleBox(
-                alignment: Alignment.centerRight,
-                child: coreStatus == CoreStatus.connected
-                    ? IconButton.filled(
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 20,
-                        padding: EdgeInsets.zero,
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.greenAccent,
-                          foregroundColor: switch (Theme.brightnessOf(
-                            context,
-                          )) {
-                            Brightness.light =>
-                              context.colorScheme.onSurfaceVariant,
-                            Brightness.dark =>
-                              context.colorScheme.onPrimaryFixedVariant,
-                          },
-                        ),
-                        onPressed: _handleConnection,
-                        icon: Icon(Icons.check, fontWeight: FontWeight.w900),
-                      )
-                    : FilledButton.icon(
-                        key: ValueKey(coreStatus),
-                        onPressed: _handleConnection,
-                        style: FilledButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          backgroundColor: switch (coreStatus) {
-                            CoreStatus.connecting => null,
-                            CoreStatus.connected => Colors.greenAccent,
-                            CoreStatus.disconnected =>
-                              context.colorScheme.error,
-                          },
-                          foregroundColor: switch (coreStatus) {
-                            CoreStatus.connecting => null,
-                            CoreStatus.connected => switch (Theme.brightnessOf(
-                              context,
-                            )) {
-                              Brightness.light =>
-                                context.colorScheme.onSurfaceVariant,
-                              Brightness.dark => null,
-                            },
-                            CoreStatus.disconnected =>
-                              context.colorScheme.onError,
-                          },
-                        ),
-                        icon: SizedBox(
-                          height: globalState.measure.bodyMediumHeight,
-                          width: globalState.measure.bodyMediumHeight,
-                          child: switch (coreStatus) {
-                            CoreStatus.connecting => Padding(
-                              padding: EdgeInsets.all(2),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 3,
-                                color: context.colorScheme.onPrimary,
-                                backgroundColor: Colors.transparent,
-                              ),
-                            ),
-                            CoreStatus.connected => Icon(
-                              Icons.check_sharp,
-                              fontWeight: FontWeight.w900,
-                            ),
-                            CoreStatus.disconnected => Icon(
-                              Icons.restart_alt_sharp,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          },
-                        ),
-                        label: Text(switch (coreStatus) {
-                          CoreStatus.connecting => appLocalizations.connecting,
-                          CoreStatus.connected => appLocalizations.connected,
-                          CoreStatus.disconnected =>
-                            appLocalizations.disconnected,
-                        }),
-                      ),
-              ),
-            );
-          },
-        ),
-      if (isEdit)
-        ValueListenableBuilder(
-          valueListenable: _addedWidgetsNotifier,
-          builder: (_, addedChildren, child) {
-            if (addedChildren.isEmpty) {
-              return Container();
-            }
-            return child!;
-          },
-          child: IconButton(
-            onPressed: () {
-              _showAddWidgetsModal();
-            },
-            icon: Icon(Icons.add_circle),
-          ),
-        ),
-      FadeRotationScaleBox(
-        child: isEdit
-            ? IconButton(
-                key: ValueKey(true),
-                icon: Icon(Icons.save, key: ValueKey('save-icon')),
-                onPressed: _handleUpdateIsEdit,
-              )
-            : IconButton(
-                key: ValueKey(false),
-                icon: Icon(Icons.edit, key: ValueKey('edit-icon')),
-                onPressed: _handleUpdateIsEdit,
-              ),
-      ),
-    ];
-  }
-
-  void _showAddWidgetsModal() {
-    showSheet(
-      builder: (_, type) {
-        return ValueListenableBuilder(
-          valueListenable: _addedWidgetsNotifier,
-          builder: (_, value, _) {
-            return AdaptiveSheetScaffold(
-              type: type,
-              body: _AddDashboardWidgetModal(
-                items: value,
-                onAdd: (gridItem) {
-                  key.currentState?.handleAdd(gridItem);
-                },
-              ),
-              title: appLocalizations.add,
-            );
-          },
-        );
-      },
-      context: context,
-    );
-  }
-
-  Future<void> _handleUpdateIsEdit() async {
-    if (_isEditNotifier.value == true) {
-      await _handleSave();
-    }
-    _isEditNotifier.value = !_isEditNotifier.value;
-  }
-
-  Future<void> _handleSave() async {
-    final currentState = key.currentState;
-    if (currentState == null) {
-      return;
-    }
-    if (mounted) {
-      await currentState.isTransformCompleter;
-      final dashboardWidgets = currentState.children
-          .map((item) => DashboardWidget.getDashboardWidget(item))
-          .toList();
-      ref
-          .read(appSettingProvider.notifier)
-          .update(
-            (state) => state.copyWith(dashboardWidgets: dashboardWidgets),
-          );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dashboardState = ref.watch(dashboardStateProvider);
-    final columns = max(4 * ((dashboardState.contentWidth / 280).ceil()), 8);
-    final spacing = 14.mAp;
-    final children = [
-      ...dashboardState.dashboardWidgets
-          .where(
-            (item) => item.platforms.contains(SupportPlatform.currentPlatform),
-          )
-          .map((item) => item.widget),
-    ];
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _addedWidgetsNotifier.value = DashboardWidget.values
-          .where(
-            (item) =>
-                !children.contains(item.widget) &&
-                item.platforms.contains(SupportPlatform.currentPlatform),
-          )
-          .map((item) => item.widget)
-          .toList();
-    });
-    return _buildIsEdit(
-      (isEdit) => CommonScaffold(
-        title: appLocalizations.dashboard,
-        actions: _buildActions(isEdit),
-        floatingActionButton: const StartButton(),
-        body: Align(
-          alignment: Alignment.topCenter,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16).copyWith(bottom: 88),
-            child: isEdit
-                ? SystemBackBlock(
-                    child: CommonPopScope(
-                      child: SuperGrid(
-                        key: key,
-                        crossAxisCount: columns,
-                        crossAxisSpacing: spacing,
-                        mainAxisSpacing: spacing,
-                        children: [
-                          ...dashboardState.dashboardWidgets
-                              .where(
-                                (item) => item.platforms.contains(
-                                  SupportPlatform.currentPlatform,
-                                ),
-                              )
-                              .map((item) => item.widget),
-                        ],
-                        onUpdate: () {
-                          _handleSave();
-                        },
-                      ),
-                      onPop: (context) {
-                        _handleUpdateIsEdit();
-                        return false;
-                      },
-                    ),
-                  )
-                : Grid(
-                    crossAxisCount: columns,
-                    crossAxisSpacing: spacing,
-                    mainAxisSpacing: spacing,
-                    children: children,
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AddDashboardWidgetModal extends StatelessWidget {
-  final List<GridItem> items;
-  final Function(GridItem item) onAdd;
-
-  const _AddDashboardWidgetModal({required this.items, required this.onAdd});
-
-  @override
-  Widget build(BuildContext context) {
-    return DeferredPointerHandler(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: Grid(
-          crossAxisCount: 8,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          children: items
-              .map(
-                (item) => item.wrap(
-                  builder: (child) {
-                    return _AddedContainer(
-                      onAdd: () {
-                        onAdd(item);
-                      },
-                      child: child,
-                    );
-                  },
-                ),
-              )
-              .toList(),
-        ),
-      ),
-    );
-  }
-}
-
-class _AddedContainer extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onAdd;
-
-  const _AddedContainer({required this.child, required this.onAdd});
-
-  @override
-  State<_AddedContainer> createState() => _AddedContainerState();
-}
-
-class _AddedContainerState extends State<_AddedContainer> {
   @override
   void initState() {
     super.initState();
-  }
-
-  @override
-  void didUpdateWidget(_AddedContainer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.child != widget.child) {}
-  }
-
-  Future<void> _handleAdd() async {
-    widget.onAdd();
+    _bgController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 20),
+    )..repeat();
   }
 
   @override
   void dispose() {
+    _bgController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      body: SafeArea(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // 背景装饰
+            _BackgroundDecoration(controller: _bgController),
+            // 主内容
+            _buildBody(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    return Column(
       children: [
-        ActivateBox(child: widget.child),
-        Positioned(
-          top: -8,
-          right: -8,
-          child: DeferPointer(
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: IconButton.filled(
-                iconSize: 20,
-                padding: EdgeInsets.all(2),
-                onPressed: _handleAdd,
-                icon: Icon(Icons.add),
+        // 顶部订阅信息栏
+        _buildSubscriptionBar(),
+        // 中间连接按钮区域
+        Expanded(child: _buildCenterSection()),
+        // 底部模式选择 + 流量
+        _buildBottomSection(),
+      ],
+    );
+  }
+
+  Widget _buildSubscriptionBar() {
+    return Consumer(
+      builder: (_, ref, _) {
+        final profiles = ref.watch(profilesProvider);
+        final currentProfileId = ref.watch(currentProfileIdProvider);
+        final currentProfile = ref.watch(currentProfileProvider);
+
+        if (profiles.isEmpty) return Container();
+
+        return Container(
+          margin: EdgeInsets.fromLTRB(16, 16, 16, 0),
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 订阅选择 + 刷新
+              Row(
+                children: [
+                  // 刷新按钮
+                  IconButton(
+                    onPressed: () {
+                      appController.updateProfiles();
+                    },
+                    icon: Icon(Icons.refresh, size: 20),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                  SizedBox(width: 4),
+                  // 订阅下拉选择
+                  Expanded(
+                    child: _SubscriptionDropdown(
+                      profiles: profiles,
+                      currentProfileId: currentProfileId,
+                    ),
+                  ),
+                ],
               ),
+              // 流量进度条
+              SizedBox(height: 6),
+              _SubscriptionInfo(subscriptionInfo: currentProfile?.subscriptionInfo),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCenterSection() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildConnectionButton(),
+          SizedBox(height: 16),
+          _buildConnectionStatus(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectionButton() {
+    return Container(
+      width: 160,
+      height: 160,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      ),
+      child: Center(child: StartButton()),
+    );
+  }
+
+  Widget _buildConnectionStatus() {
+    return Consumer(
+      builder: (_, ref, _) {
+        final coreStatus = ref.watch(coreStatusProvider);
+        final runTime = ref.watch(runTimeProvider);
+
+        final (text, color) = switch (coreStatus) {
+          CoreStatus.connected => (
+              utils.getTimeText(runTime),
+              Theme.of(context).colorScheme.primary,
+            ),
+          CoreStatus.connecting => (
+              appLocalizations.connecting,
+              Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          CoreStatus.disconnected => (
+              appLocalizations.disconnected,
+              Theme.of(context).colorScheme.error,
+            ),
+        };
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              text,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            SizedBox(height: 2),
+            Text(
+              '点击连接',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomSection() {
+    return Container(
+      margin: EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 出站模式选择
+          _OutboundModeSelector(),
+          SizedBox(height: 12),
+          Divider(height: 1),
+          SizedBox(height: 12),
+          // 流量统计
+          _TrafficStats(),
+        ],
+      ),
+    );
+  }
+}
+
+/// 背景装饰——带旋转的世界地图纹理
+class _BackgroundDecoration extends StatelessWidget {
+  final AnimationController? controller;
+  const _BackgroundDecoration({this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return AnimatedBuilder(
+      animation: controller!,
+      builder: (_, __) {
+        return Transform.rotate(
+          angle: controller!.value * 2 * pi * 0.1,
+          child: Container(
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.public,
+              size: MediaQuery.of(context).size.width * 0.6,
+              color: color.withOpacity(0.04),
             ),
           ),
+        );
+      },
+    );
+  }
+}
+
+/// 订阅下拉选择
+class _SubscriptionDropdown extends StatelessWidget {
+  final List<dynamic> profiles;
+  final int? currentProfileId;
+
+  const _SubscriptionDropdown({required this.profiles, this.currentProfileId});
+
+  @override
+  Widget build(BuildContext context) {
+    final currentProfile = profiles.cast<dynamic>().firstWhere(
+      (p) => p.id == currentProfileId,
+      orElse: () => profiles.first,
+    );
+
+    return DropdownButton<int>(
+      value: currentProfile.id,
+      isExpanded: true,
+      underline: Container(),
+      borderRadius: BorderRadius.circular(12),
+      dropdownColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+      padding: EdgeInsets.zero,
+      style: Theme.of(context).textTheme.bodyLarge,
+      items: profiles
+          .map<DropdownMenuItem<int>>(
+            (p) => DropdownMenuItem(
+              value: p.id,
+              child: Text(
+                p.label.isNotEmpty ? p.label : 'Profile #${p.id}',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: (id) {
+        if (id == null) return;
+        ref.read(currentProfileIdProvider.notifier).value = id;
+      },
+    );
+  }
+}
+
+/// 订阅流量信息
+class _SubscriptionInfo extends StatelessWidget {
+  final SubscriptionInfo? subscriptionInfo;
+  const _SubscriptionInfo({this.subscriptionInfo});
+
+  @override
+  Widget build(BuildContext context) {
+    if (subscriptionInfo == null) {
+      return Text(
+        appLocalizations.infiniteTime,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+      );
+    }
+
+    final upload = subscriptionInfo!.upload;
+    final download = subscriptionInfo!.download;
+    final total = subscriptionInfo!.total;
+    final use = upload + download;
+    final progress = total > 0 ? (use / total).clamp(0.0, 1.0) : 0.0;
+
+    final useShow = use.traffic.show;
+    final totalShow = total > 0 ? total.traffic.show : '∞ GiB';
+    final expireText = subscriptionInfo!.expire != 0
+        ? DateTime.fromMillisecondsSinceEpoch(
+            subscriptionInfo!.expire * 1000,
+          ).show
+        : appLocalizations.infiniteTime;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (total > 0)
+          LinearProgressIndicator(
+            value: progress,
+            minHeight: 4,
+            backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '$useShow / $totalShow',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            Text(
+              '剩余 $expireText',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 出站模式选择器
+class _OutboundModeSelector extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Consumer(
+      builder: (_, ref, _) {
+        final mode = ref.watch(
+          patchClashConfigProvider.select((state) => state.mode),
+        );
+        return Row(
+          children: Mode.values.map((m) {
+            final isSelected = m == mode;
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Material(
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primaryContainer
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
+                    onTap: () => appController.changeMode(m),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _modeIcon(m),
+                            size: 18,
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                : Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            Intl.message(m.name),
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: isSelected
+                                      ? Theme.of(context).colorScheme.onPrimaryContainer
+                                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontWeight: isSelected ? FontWeight.w600 : null,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  IconData _modeIcon(Mode mode) {
+    return switch (mode) {
+      Mode.rule => Icons.tune,
+      Mode.global => Icons.language,
+      Mode.direct => Icons.swap_horiz,
+    };
+  }
+}
+
+/// 流量统计
+class _TrafficStats extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Consumer(
+      builder: (_, ref, _) {
+        final totalTraffic = ref.watch(totalTrafficProvider);
+        final up = totalTraffic.up;
+        final down = totalTraffic.down;
+        final primaryColor = globalState.theme.darken3PrimaryContainer;
+        final secondaryColor = globalState.theme.darken2SecondaryContainer;
+
+        return Row(
+          children: [
+            Expanded(
+              child: _TrafficStatItem(
+                label: appLocalizations.upload,
+                value: up,
+                color: primaryColor,
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: _TrafficStatItem(
+                label: appLocalizations.download,
+                value: down,
+                color: secondaryColor,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 单项流量统计
+class _TrafficStatItem extends StatelessWidget {
+  final String label;
+  final num value;
+  final Color color;
+
+  const _TrafficStatItem({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            SizedBox(width: 6),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+        SizedBox(height: 4),
+        Text(
+          '${value.traffic.value} ${value.traffic.unit}',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
         ),
       ],
     );
