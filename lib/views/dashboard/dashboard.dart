@@ -5,6 +5,7 @@ import 'package:fl_clash/controller.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/config.dart';
+import 'package:fl_clash/providers/database.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:fl_clash/views/dashboard/widgets/start_button.dart';
@@ -256,29 +257,33 @@ class _SubscriptionDropdown extends StatelessWidget {
       orElse: () => profiles.first,
     );
 
-    return DropdownButton<int>(
-      value: currentProfile.id,
-      isExpanded: true,
-      underline: Container(),
-      borderRadius: BorderRadius.circular(12),
-      dropdownColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      padding: EdgeInsets.zero,
-      style: Theme.of(context).textTheme.bodyLarge,
-      items: profiles
-          .map<DropdownMenuItem<int>>(
-            (p) => DropdownMenuItem(
-              value: p.id,
-              child: Text(
-                p.label.isNotEmpty ? p.label : 'Profile #${p.id}',
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-          )
-          .toList(),
-      onChanged: (id) {
-        if (id == null) return;
-        ref.read(currentProfileIdProvider.notifier).value = id;
+    return Consumer(
+      builder: (_, ref, __) {
+        return DropdownButton<int>(
+          value: currentProfile.id,
+          isExpanded: true,
+          underline: Container(),
+          borderRadius: BorderRadius.circular(12),
+          dropdownColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          padding: EdgeInsets.zero,
+          style: Theme.of(context).textTheme.bodyLarge,
+          items: profiles
+              .map<DropdownMenuItem<int>>(
+                (p) => DropdownMenuItem(
+                  value: p.id,
+                  child: Text(
+                    p.label.isNotEmpty ? p.label : 'Profile #${p.id}',
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (id) {
+            if (id == null) return;
+            ref.read(currentProfileIdProvider.notifier).value = id;
+          },
+        );
       },
     );
   }
