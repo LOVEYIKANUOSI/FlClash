@@ -4,7 +4,6 @@ import 'package:defer_pointer/defer_pointer.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/controller.dart';
 import 'package:fl_clash/enum/enum.dart';
-import 'package:fl_clash/features/v2board/login_dialog.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
 import 'package:fl_clash/widgets/widgets.dart';
@@ -144,16 +143,6 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
               ),
             );
           },
-        ),
-      if (!isEdit)
-        Tooltip(
-          message: 'V2Board',
-          child: IconButton(
-            onPressed: () {
-              showV2BoardLoginAndImport();
-            },
-            icon: const Icon(Icons.account_circle_outlined),
-          ),
         ),
       if (isEdit)
         ValueListenableBuilder(
