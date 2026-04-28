@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_clash/features/v2board/auth_store.dart';
 import 'package:fl_clash/features/v2board/client.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class StoreView extends ConsumerStatefulWidget {
   const StoreView({super.key});
@@ -309,25 +310,30 @@ class _PlanCardState extends State<_PlanCard> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('购买成功！')),
           );
-        } else if (type == 0 && data is String && data.isNotEmpty) {
-          // 支付链接或二维码
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('请完成支付'),
-              content: SelectableText(data),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('关闭'),
-                ),
-              ],
-            ),
-          );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('支付信息: $data')),
-          );
+          final payUrl = (data is String) ? data : data.toString();
+          if (type == 1 && payUrl.isNotEmpty) {
+            // 跳转到外部支付页面
+            launchUrl(Uri.parse(payUrl), mode: LaunchMode.externalApplication);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('已打开支付页面，请在浏览器中完成支付')),
+            );
+          } else {
+            // 显示二维码或支付链接
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('请完成支付'),
+                content: SelectableText(payUrl),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('关闭'),
+                  ),
+                ],
+              ),
+            );
+          }
         }
       }
     } catch (e) {

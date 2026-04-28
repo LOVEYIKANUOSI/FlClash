@@ -160,7 +160,13 @@ class V2BoardClient {
       data: {'trade_no': tradeNo, 'method': method},
       options: Options(headers: {'Authorization': authData}),
     );
-    return _requireDataMap(response, fallbackMessage: '获取支付信息失败');
+    final body = response.data;
+    if (body is Map) {
+      // 有些版本返回 { data: { type, data } }，有些直接 { type, data }
+      final result = (body['data'] is Map) ? body['data'] as Map<String, dynamic> : body;
+      return result;
+    }
+    throw '获取支付信息失败';
   }
 
   String _normalizeBaseUrl(String value) {
