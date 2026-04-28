@@ -2,15 +2,28 @@ import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/views/views.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Navigation {
   static Navigation? _instance;
+  static bool showHidden = false;
+
+  static Future<void> initShowHidden() async {
+    final prefs = await SharedPreferences.getInstance();
+    showHidden = prefs.getBool('nav_show_hidden') ?? false;
+  }
+
+  static Future<void> setShowHidden(bool value) async {
+    showHidden = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('nav_show_hidden', value);
+  }
 
   List<NavigationItem> getItems({
     bool openLogs = false,
     bool hasProxies = false,
   }) {
-    return [
+    final items = <NavigationItem>[
       NavigationItem(
         keep: false,
         icon: Icon(Icons.space_dashboard),
@@ -33,30 +46,33 @@ class Navigation {
         builder: (_) =>
             const ProfilesView(key: GlobalObjectKey(PageLabel.profiles)),
       ),
-      NavigationItem(
-        icon: Icon(Icons.view_timeline),
-        label: PageLabel.requests,
-        builder: (_) =>
-            const RequestsView(key: GlobalObjectKey(PageLabel.requests)),
-        description: 'requestsDesc',
-        modes: [NavigationItemMode.desktop, NavigationItemMode.more],
-      ),
-      NavigationItem(
-        icon: Icon(Icons.ballot),
-        label: PageLabel.connections,
-        builder: (_) =>
-            const ConnectionsView(key: GlobalObjectKey(PageLabel.connections)),
-        description: 'connectionsDesc',
-        modes: [NavigationItemMode.desktop, NavigationItemMode.more],
-      ),
-      NavigationItem(
-        icon: Icon(Icons.storage),
-        label: PageLabel.resources,
-        description: 'resourcesDesc',
-        builder: (_) =>
-            const ResourcesView(key: GlobalObjectKey(PageLabel.resources)),
-        modes: [NavigationItemMode.more],
-      ),
+      if (showHidden)
+        NavigationItem(
+          icon: Icon(Icons.view_timeline),
+          label: PageLabel.requests,
+          builder: (_) =>
+              const RequestsView(key: GlobalObjectKey(PageLabel.requests)),
+          description: 'requestsDesc',
+          modes: [NavigationItemMode.desktop, NavigationItemMode.more],
+        ),
+      if (showHidden)
+        NavigationItem(
+          icon: Icon(Icons.ballot),
+          label: PageLabel.connections,
+          builder: (_) =>
+              const ConnectionsView(key: GlobalObjectKey(PageLabel.connections)),
+          description: 'connectionsDesc',
+          modes: [NavigationItemMode.desktop, NavigationItemMode.more],
+        ),
+      if (showHidden)
+        NavigationItem(
+          icon: Icon(Icons.storage),
+          label: PageLabel.resources,
+          description: 'resourcesDesc',
+          builder: (_) =>
+              const ResourcesView(key: GlobalObjectKey(PageLabel.resources)),
+          modes: [NavigationItemMode.more],
+        ),
       NavigationItem(
         icon: const Icon(Icons.adb),
         label: PageLabel.logs,
@@ -73,6 +89,7 @@ class Navigation {
         modes: [NavigationItemMode.desktop, NavigationItemMode.mobile],
       ),
     ];
+    return items;
   }
 
   Navigation._internal();

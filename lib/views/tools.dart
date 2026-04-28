@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:fl_clash/common/common.dart';
+import 'package:fl_clash/common/navigation.dart';
 import 'package:fl_clash/controller.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/models/models.dart';
@@ -68,6 +69,7 @@ class _ToolViewState extends ConsumerState<ToolsView> {
     return generateSection(
       title: context.appLocalizations.settings,
       items: [
+        const _AdvanceModeItem(),
         const _LocaleItem(),
         const _ThemeItem(),
         const _BackupItem(),
@@ -309,6 +311,32 @@ class _DeveloperItem extends StatelessWidget {
       leading: const Icon(Icons.developer_board),
       title: Text(context.appLocalizations.developerMode),
       delegate: OpenDelegate(widget: const DeveloperView()),
+    );
+  }
+}
+
+class _AdvanceModeItem extends ConsumerStatefulWidget {
+  const _AdvanceModeItem();
+  @override
+  ConsumerState<_AdvanceModeItem> createState() => _AdvanceModeItemState();
+}
+
+class _AdvanceModeItemState extends ConsumerState<_AdvanceModeItem> {
+  @override
+  Widget build(BuildContext context) {
+    return ListItem(
+      leading: const Icon(Icons.tune),
+      title: const Text('高级模式'),
+      subtitle: const Text('显示请求、连接等隐藏选项'),
+      trailing: Switch(
+        value: Navigation.showHidden,
+        onChanged: (v) {
+          setState(() {});
+          Navigation.setShowHidden(v);
+          // 刷新侧边栏
+          ref.invalidate(navigationItemsStateProvider);
+        },
+      ),
     );
   }
 }

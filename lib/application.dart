@@ -64,6 +64,7 @@ class ApplicationState extends ConsumerState<Application> {
       // ===== 登录检查 =====
       final authStore = AuthStore();
       await authStore.init();
+      await Navigation.initShowHidden();
 
       if (authStore.hasSession) {
         final valid = await v2BoardClient.checkLogin(
