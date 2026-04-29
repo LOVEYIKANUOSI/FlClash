@@ -204,7 +204,6 @@ class ApplicationState extends ConsumerState<Application> {
                 return LoginPage(
                   authStore: _authStore,
                   onLoginSuccess: () {
-                    _importSubscription();
                     if (mounted) setState(() {});
                   },
                 );
