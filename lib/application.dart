@@ -204,11 +204,8 @@ class ApplicationState extends ConsumerState<Application> {
                 return LoginPage(
                   authStore: _authStore,
                   onLoginSuccess: () {
-                    final subUrl = _authStore.subscribeUrl;
-                    if (subUrl != null && subUrl.isNotEmpty) {
-                      appController.addProfileFormURL(subUrl);
-                    }
                     if (mounted) setState(() {});
+                    _importSubscription();
                   },
                 );
               }
