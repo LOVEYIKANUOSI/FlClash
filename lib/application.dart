@@ -51,6 +51,26 @@ class ApplicationState extends ConsumerState<Application> {
     return ref.read(genColorSchemeProvider(brightness));
   }
 
+  Future<void> _importSubscription() async {
+    final subUrl = _authStore.subscribeUrl;
+    if (subUrl == null || subUrl.isEmpty) return;
+    final profiles = ref.read(profilesProvider);
+    Profile? existing;
+    for (final p in profiles) {
+      if (p.url == subUrl) { existing = p; break; }
+    }
+    if (existing != null) {
+      try {
+        await appController.updateProfile(existing, showLoading: false);
+      } catch (_) {
+        ref.read(profilesProvider.notifier).del(existing.id);
+        appController.addProfileFormURL(subUrl);
+      }
+    } else {
+      appController.addProfileFormURL(subUrl);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -75,30 +95,11 @@ class ApplicationState extends ConsumerState<Application> {
 
       if (_authStore.hasSession && mounted) {
         setState(() {});
-      } else if (!_authStore.hasSession) return;
-
-      final subUrl = _authStore.subscribeUrl;
-      if (subUrl != null && subUrl.isNotEmpty) {
-        final profiles = ref.read(profilesProvider);
-        Profile? existing;
-        for (final p in profiles) {
-          if (p.url == subUrl) { existing = p; break; }
-        }
-        if (existing != null) {
-          try {
-            await appController.updateProfile(existing, showLoading: false);
-          } catch (_) {
-            ref.read(profilesProvider.notifier).del(existing.id);
-            appController.addProfileFormURL(subUrl);
-          }
-        } else {
-          appController.addProfileFormURL(subUrl);
-        }
+        _importSubscription();
+        _autoUpdateProfilesTask();
+        appController.initLink();
+        app?.initShortcuts();
       }
-
-      _autoUpdateProfilesTask();
-      appController.initLink();
-      app?.initShortcuts();
     });
   }
 
@@ -203,12 +204,8 @@ class ApplicationState extends ConsumerState<Application> {
                 return LoginPage(
                   authStore: _authStore,
                   onLoginSuccess: () {
-                    // 登录成功后导入订阅
-                    final subUrl = _authStore.subscribeUrl;
-                    if (subUrl != null && subUrl.isNotEmpty) {
-                      appController.addProfileFormURL(subUrl);
-                    }
-                    setState(() {});
+                    _importSubscription();
+                    if (mounted) setState(() {});
                   },
                 );
               }
