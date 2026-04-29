@@ -202,7 +202,14 @@ class ApplicationState extends ConsumerState<Application> {
               if (!_authStore.hasSession) {
                 return LoginPage(
                   authStore: _authStore,
-                  onLoginSuccess: () => setState(() {}),
+                  onLoginSuccess: () {
+                    // 登录成功后导入订阅
+                    final subUrl = _authStore.subscribeUrl;
+                    if (subUrl != null && subUrl.isNotEmpty) {
+                      appController.addProfileFormURL(subUrl);
+                    }
+                    setState(() {});
+                  },
                 );
               }
               return child!;

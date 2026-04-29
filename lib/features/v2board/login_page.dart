@@ -60,9 +60,6 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       widget.onLoginSuccess?.call();
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
