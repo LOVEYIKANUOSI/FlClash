@@ -39,6 +39,7 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
+      await widget.authStore.init(); // 确保初始化
       final subscribeUrl = await v2BoardClient.loginAndGetSubscribeUrl(
         V2BoardCredentials(
           baseUrl: _defaultPanelUrl,
@@ -57,7 +58,7 @@ class _LoginPageState extends State<LoginPage> {
         subscribeUrl: subscribeUrl,
       );
 
-      print('[LoginPage] saved auth: hasSession=${widget.authStore.hasSession} panelUrl=${widget.authStore.panelUrl?.substring(0, 20)}...');
+      print('[LoginPage] saved auth: hasSession=${widget.authStore.hasSession}');
 
       if (!mounted) return;
 
