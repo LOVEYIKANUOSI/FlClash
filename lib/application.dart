@@ -32,6 +32,8 @@ class Application extends ConsumerStatefulWidget {
 class ApplicationState extends ConsumerState<Application> {
   Timer? _autoUpdateProfilesTaskTimer;
   bool _preHasVpn = false;
+  bool _isAppInitialized = false;
+  final _authStore = AuthStore();
 
   final _pageTransitionsTheme = const PageTransitionsTheme(
     builders: <TargetPlatform, PageTransitionsBuilder>{
@@ -53,7 +55,6 @@ class ApplicationState extends ConsumerState<Application> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
-      // 先 attach——管理器（CoreManager 等）依赖 appController._ref
       final currentContext = globalState.navigatorKey.currentContext;
       if (currentContext != null) {
         await appController.attach(currentContext, ref);
@@ -61,42 +62,27 @@ class ApplicationState extends ConsumerState<Application> {
         exit(0);
       }
 
-      // ===== 登录检查 =====
-      final authStore = AuthStore();
-      await authStore.init();
+      await _authStore.init();
       await Navigation.initShowHidden();
 
-      if (authStore.hasSession) {
+      if (_authStore.hasSession) {
         final valid = await v2BoardClient.checkLogin(
-          authStore.panelUrl!,
-          authStore.authData!,
+          _authStore.panelUrl!,
+          _authStore.authData!,
         );
-        if (!valid) {
-          await authStore.clear();
-        }
+        if (!valid) await _authStore.clear();
       }
 
-      if (!authStore.hasSession) {
-        final ctx = globalState.navigatorKey.currentContext;
-        if (ctx != null) {
-          await Navigator.of(ctx).push(
-            MaterialPageRoute(
-              builder: (_) => LoginPage(authStore: authStore),
-            ),
-          );
-        }
-      }
+      if (_authStore.hasSession && mounted) {
+        setState(() {});
+      } else if (!_authStore.hasSession) return;
 
-      // 登录成功后导入/更新订阅
-      final subUrl = authStore.subscribeUrl;
+      final subUrl = _authStore.subscribeUrl;
       if (subUrl != null && subUrl.isNotEmpty) {
         final profiles = ref.read(profilesProvider);
         Profile? existing;
         for (final p in profiles) {
-          if (p.url == subUrl) {
-            existing = p;
-            break;
-          }
+          if (p.url == subUrl) { existing = p; break; }
         }
         if (existing != null) {
           try {
@@ -109,7 +95,6 @@ class ApplicationState extends ConsumerState<Application> {
           appController.addProfileFormURL(subUrl);
         }
       }
-      // ===== 登录检查结束 =====
 
       _autoUpdateProfilesTask();
       appController.initLink();
@@ -212,7 +197,17 @@ class ApplicationState extends ConsumerState<Application> {
               primaryColor: themeProps.primaryColor,
             ).toPureBlack(themeProps.pureBlack),
           ),
-          home: child!,
+          home: Consumer(
+            builder: (_, ref, __) {
+              if (!_authStore.hasSession) {
+                return LoginPage(
+                  authStore: _authStore,
+                  onLoginSuccess: () => setState(() {}),
+                );
+              }
+              return child!;
+            },
+          ),
         );
       },
       child: const HomePage(),
