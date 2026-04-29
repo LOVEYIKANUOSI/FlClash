@@ -200,10 +200,13 @@ class ApplicationState extends ConsumerState<Application> {
           ),
           home: Consumer(
             builder: (_, ref, __) {
-              if (!_authStore.hasSession) {
+              final loggedIn = _authStore.hasSession;
+              print('[APP] home Consumer: hasSession=$loggedIn');
+              if (!loggedIn) {
                 return LoginPage(
                   authStore: _authStore,
                   onLoginSuccess: () {
+                    print('[APP] onLoginSuccess: hasSession=${_authStore.hasSession}');
                     if (mounted) setState(() {});
                   },
                 );

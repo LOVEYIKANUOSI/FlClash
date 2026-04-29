@@ -57,6 +57,8 @@ class _LoginPageState extends State<LoginPage> {
         subscribeUrl: subscribeUrl,
       );
 
+      print('[LoginPage] saved auth: hasSession=${widget.authStore.hasSession} panelUrl=${widget.authStore.panelUrl?.substring(0, 20)}...');
+
       if (!mounted) return;
 
       widget.onLoginSuccess?.call();
