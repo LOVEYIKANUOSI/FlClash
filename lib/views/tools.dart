@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'dart:io';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/common/navigation.dart';
 import 'package:fl_clash/controller.dart';
+import 'package:fl_clash/features/v2board/auth_store.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
@@ -81,6 +83,7 @@ class _ToolViewState extends ConsumerState<ToolsView> {
         if (system.isAndroid) const _AccessItem(),
         const _AdvancedConfigItem(),
         const _SettingItem(),
+        const _LogoutItem(),
       ],
     );
   }
@@ -339,6 +342,38 @@ class _AdvanceModeItemState extends ConsumerState<_AdvanceModeItem> {
           ref.invalidate(navigationItemsStateProvider);
         },
       ),
+    );
+  }
+}
+
+class _LogoutItem extends StatelessWidget {
+  const _LogoutItem();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListItem(
+      leading: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
+      title: Text('退出登录', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+      subtitle: const Text('退出后需重新登录'),
+      onTap: () async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('退出登录'),
+            content: const Text('确定退出？应用将关闭。'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确定退出')),
+            ],
+          ),
+        );
+        if (confirmed == true) {
+          final authStore = AuthStore();
+          await authStore.init();
+          await authStore.clear();
+          if (context.mounted) exit(0);
+        }
+      },
     );
   }
 }
