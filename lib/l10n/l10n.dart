@@ -89,6 +89,16 @@ class AppLocalizations {
     return Intl.message('Profiles', name: 'profiles', desc: '', args: []);
   }
 
+  /// `Notices`
+  String get notices {
+    return Intl.message('Notices', name: 'notices', desc: '', args: []);
+  }
+
+  /// `Tickets`
+  String get tickets {
+    return Intl.message('Tickets', name: 'tickets', desc: '', args: []);
+  }
+
   /// `Tools`
   String get tools {
     return Intl.message('Tools', name: 'tools', desc: '', args: []);

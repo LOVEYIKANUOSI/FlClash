@@ -326,6 +326,8 @@ enum PageLabel {
   proxies,
   profiles,
   store,
+  notices,
+  tickets,
   tools,
   logs,
   requests,

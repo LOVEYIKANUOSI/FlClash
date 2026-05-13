@@ -51,6 +51,16 @@ class Navigation {
         label: PageLabel.store,
         builder: (_) => const StoreView(key: GlobalObjectKey(PageLabel.store)),
       ),
+      NavigationItem(
+        icon: const Icon(Icons.campaign),
+        label: PageLabel.notices,
+        builder: (_) => const NoticesView(key: GlobalObjectKey(PageLabel.notices)),
+      ),
+      NavigationItem(
+        icon: const Icon(Icons.support_agent),
+        label: PageLabel.tickets,
+        builder: (_) => const TicketsView(key: GlobalObjectKey(PageLabel.tickets)),
+      ),
       if (showHidden)
         NavigationItem(
           icon: Icon(Icons.view_timeline),

@@ -257,7 +257,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "cut": MessageLookupByLibrary.simpleMessage("Вырезать"),
     "dark": MessageLookupByLibrary.simpleMessage("Темный"),
     "dashboard": MessageLookupByLibrary.simpleMessage("Панель управления"),
-      "store": MessageLookupByLibrary.simpleMessage("Магазин"),
     "dataCollectionContent": MessageLookupByLibrary.simpleMessage(
       "Это приложение использует Firebase Crashlytics для сбора информации о сбоях nhằm улучшения стабильности приложения.\nСобираемые данные включают информацию об устройстве и подробности о сбоях, но не содержат персональных конфиденциальных данных.\nВы можете отключить эту функцию в настройках.",
     ),
@@ -666,6 +665,8 @@ class MessageLookup extends MessageLookupByLibrary {
       "Пожалуйста, введите URL профиля",
     ),
     "profiles": MessageLookupByLibrary.simpleMessage("Профили"),
+    "notices": MessageLookupByLibrary.simpleMessage("Уведомления"),
+    "tickets": MessageLookupByLibrary.simpleMessage("Тикеты"),
     "profilesSort": MessageLookupByLibrary.simpleMessage("Сортировка профилей"),
     "project": MessageLookupByLibrary.simpleMessage("Проект"),
     "providers": MessageLookupByLibrary.simpleMessage("Провайдеры"),

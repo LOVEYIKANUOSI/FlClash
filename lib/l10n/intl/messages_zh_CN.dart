@@ -173,7 +173,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "cut": MessageLookupByLibrary.simpleMessage("剪切"),
     "dark": MessageLookupByLibrary.simpleMessage("深色"),
     "dashboard": MessageLookupByLibrary.simpleMessage("仪表盘"),
-      "store": MessageLookupByLibrary.simpleMessage("商店"),
     "dataCollectionContent": MessageLookupByLibrary.simpleMessage(
       "本应用使用 Firebase Crashlytics 收集崩溃信息以改进应用稳定性。\n收集的数据包括设备信息和崩溃详情，不包含个人敏感数据。\n您可以在设置中关闭此功能。",
     ),
@@ -422,6 +421,8 @@ class MessageLookup extends MessageLookupByLibrary {
       "请输入配置URL",
     ),
     "profiles": MessageLookupByLibrary.simpleMessage("配置"),
+    "notices": MessageLookupByLibrary.simpleMessage("公告"),
+    "tickets": MessageLookupByLibrary.simpleMessage("工单"),
     "profilesSort": MessageLookupByLibrary.simpleMessage("配置排序"),
     "project": MessageLookupByLibrary.simpleMessage("项目"),
     "providers": MessageLookupByLibrary.simpleMessage("提供者"),

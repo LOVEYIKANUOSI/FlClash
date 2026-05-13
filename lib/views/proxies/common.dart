@@ -5,6 +5,8 @@ import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/state.dart';
 
+const _nonProxyTypes = {'Direct', 'Reject', 'RejectDrop', 'Compatible', 'Pass'};
+
 double get listHeaderHeight {
   final measure = globalState.measure;
   return 20 + measure.titleMediumHeight + 4 + measure.bodyMediumHeight + 2;
@@ -22,6 +24,7 @@ double getItemHeight(ProxyCardType proxyCardType) {
 }
 
 Future<void> proxyDelayTest(Proxy proxy, [String? testUrl]) async {
+  if (_nonProxyTypes.contains(proxy.type)) return;
   final groups = appController.groups;
   final selectedMap = appController.currentProfile?.selectedMap ?? {};
   final state = computeRealSelectedProxyState(
@@ -44,7 +47,8 @@ Future<void> proxyDelayTest(Proxy proxy, [String? testUrl]) async {
 }
 
 Future<void> delayTest(List<Proxy> proxies, [String? testUrl]) async {
-  final proxyNames = proxies.map((proxy) => proxy.name).toSet().toList();
+  final valid = proxies.where((p) => !_nonProxyTypes.contains(p.type)).toList();
+  final proxyNames = valid.map((proxy) => proxy.name).toSet().toList();
 
   final delayProxies = proxyNames.map<Future>((proxyName) async {
     final groups = appController.groups;
