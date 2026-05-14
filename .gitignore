@@ -58,6 +58,18 @@ CLAUDE.md
 /android/core/**/cmake-build-*/
 /android/core/**/jniLibs/
 
+# Generated files (build_runner)
+*.g.dart
+*.freezed.dart
+
+# Temporary files
+*.log
+
+# Flutter generated plugin registrant
+**/generated_plugin_registrant.*
+**/generated_plugins.cmake
+**/GeneratedPluginRegistrant.*
+
 #FlClash
 /libclash/
 /android/app/src/main/jniLibs/
