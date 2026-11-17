@@ -1,3 +1,5 @@
+import 'package:fl_clash/features/v2board/auth_store.dart';
+import 'package:fl_clash/features/v2board/client.dart';
 import 'package:fl_clash/features/v2board/v2board_state.dart';
 import 'package:fl_clash/ui/icons/icons.dart';
 import 'package:fl_clash/ui/ui.dart';
@@ -12,10 +14,31 @@ class V2BoardAccountView extends StatefulWidget {
 }
 
 class _V2BoardAccountViewState extends State<V2BoardAccountView> {
+  final AuthStore _authStore = AuthStore();
+  Map<String, dynamic>? _userInfo;
+
   @override
   void initState() {
     super.initState();
     v2BoardState.addListener(_handleStateChanged);
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    try {
+      await _authStore.init();
+      final authData = _authStore.authData;
+      if (authData == null) {
+        return;
+      }
+      final userInfo = await v2BoardClient.getUserInfo(
+        _authStore.panelUrl,
+        authData,
+      );
+      if (mounted) {
+        setState(() => _userInfo = userInfo);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -39,6 +62,71 @@ class _V2BoardAccountViewState extends State<V2BoardAccountView> {
     final mm = at.minute.toString().padLeft(2, '0');
     final ss = at.second.toString().padLeft(2, '0');
     return '${v2BoardState.lastHeartbeatOk ? '正常' : '失败'} · $hh:$mm:$ss';
+  }
+
+  int _asInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse('$value') ?? 0;
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) {
+      return '0 B';
+    }
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var value = bytes.toDouble();
+    var index = 0;
+    while (value >= 1024 && index < units.length - 1) {
+      value /= 1024;
+      index++;
+    }
+    return '${value.toStringAsFixed(index == 0 ? 0 : 2)} ${units[index]}';
+  }
+
+  List<Widget> _subscriptionItems() {
+    final userInfo = _userInfo;
+    if (userInfo == null) {
+      return [
+        _infoTile(
+          glyph: AppGlyphs.verified,
+          title: '订阅信息',
+          subtitle: '加载中或暂不可用',
+        ),
+      ];
+    }
+    final plan = userInfo['plan'];
+    final planName = plan is Map ? '${plan['name'] ?? '无订阅'}' : '无订阅';
+    final total = _asInt(userInfo['transfer_enable']);
+    final used = _asInt(userInfo['u']) + _asInt(userInfo['d']);
+    final remaining = (total - used).clamp(0, total);
+    final expiredAt = _asInt(userInfo['expired_at']);
+    final expireText = expiredAt <= 0
+        ? '长期有效'
+        : DateTime.fromMillisecondsSinceEpoch(
+            expiredAt * 1000,
+          ).toString().substring(0, 10);
+    return [
+      _infoTile(
+        glyph: AppGlyphs.verified,
+        title: planName,
+        subtitle: '到期 $expireText',
+      ),
+      _infoTile(
+        glyph: AppGlyphs.dataUsage,
+        title: '剩余流量',
+        subtitle: '${_formatBytes(remaining)} / ${_formatBytes(total)}',
+      ),
+      _infoTile(
+        glyph: AppGlyphs.cloudDownload,
+        title: '已用流量',
+        subtitle: _formatBytes(used),
+      ),
+    ];
   }
 
   Widget _infoTile({
@@ -78,7 +166,10 @@ class _V2BoardAccountViewState extends State<V2BoardAccountView> {
         padding: const EdgeInsets.only(top: 8, bottom: 32),
         children: [
           generateSection(
-            title: '账号',
+            title: '订阅',
+            items: _subscriptionItems(),
+          ),
+          generateSection(
             items: [
               _infoTile(
                 glyph: AppGlyphs.profiles,
@@ -141,7 +232,12 @@ class _V2BoardAccountViewState extends State<V2BoardAccountView> {
               _actionTile(
                 glyph: AppGlyphs.sync,
                 label: '刷新专属订阅',
-                onPressed: state.busy ? null : state.refreshSubscribe,
+                onPressed: state.busy
+                    ? null
+                    : () {
+                        state.refreshSubscribe();
+                        _loadUserInfo();
+                      },
               ),
               _actionTile(
                 glyph: AppGlyphs.cpu,

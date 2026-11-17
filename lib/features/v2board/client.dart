@@ -231,6 +231,280 @@ class V2BoardClient {
     return V2BoardDomainReportResult(active: active, domainPool: pool);
   }
 
+  /// 套餐列表（商城页）。
+  Future<List<Map<String, dynamic>>> fetchPlans(
+    String baseUrl,
+    String authData,
+  ) async {
+    final body = await _getJson(baseUrl, '/api/v1/user/plan/fetch', authData);
+    return _asMapList(body);
+  }
+
+  /// 公告列表。
+  Future<List<Map<String, dynamic>>> fetchNotices(
+    String baseUrl,
+    String authData,
+  ) async {
+    final body = await _getJson(baseUrl, '/api/v1/user/notice/fetch', authData);
+    return _asMapList(body);
+  }
+
+  /// 工单列表。
+  Future<List<Map<String, dynamic>>> fetchTickets(
+    String baseUrl,
+    String authData,
+  ) async {
+    final body = await _getJson(baseUrl, '/api/v1/user/ticket/fetch', authData);
+    return _asMapList(body);
+  }
+
+  /// 工单详情（含消息列表）。
+  Future<Map<String, dynamic>?> fetchTicketDetail(
+    String baseUrl,
+    String authData,
+    int ticketId,
+  ) async {
+    final response = await _dio.get<dynamic>(
+      _buildUrl(baseUrl, '/api/v1/user/ticket/fetch'),
+      queryParameters: {'id': ticketId},
+      options: Options(headers: {'Authorization': authData}),
+    );
+    final data = response.data;
+    if (response.statusCode == 200 && data is Map && data['data'] is Map) {
+      return Map<String, dynamic>.from(data['data'] as Map);
+    }
+    return null;
+  }
+
+  /// 新建工单。
+  Future<void> createTicket(
+    String baseUrl,
+    String authData, {
+    required String subject,
+    required int level,
+    required String message,
+  }) async {
+    await _postExpectTrue(
+      baseUrl,
+      '/api/v1/user/ticket/save',
+      authData,
+      data: {'subject': subject, 'level': level, 'message': message},
+      fallbackMessage: '提交工单失败',
+    );
+  }
+
+  /// 回复工单。
+  Future<void> replyTicket(
+    String baseUrl,
+    String authData, {
+    required int id,
+    required String message,
+  }) async {
+    await _postExpectTrue(
+      baseUrl,
+      '/api/v1/user/ticket/reply',
+      authData,
+      data: {'id': id, 'message': message},
+      fallbackMessage: '回复工单失败',
+    );
+  }
+
+  /// 关闭工单。
+  Future<void> closeTicket(
+    String baseUrl,
+    String authData,
+    int id,
+  ) async {
+    await _postExpectTrue(
+      baseUrl,
+      '/api/v1/user/ticket/close',
+      authData,
+      data: {'id': id},
+      fallbackMessage: '关闭工单失败',
+    );
+  }
+
+  /// 创建订单（先取消该账号所有未支付订单，避免重复下单被面板拒绝）。
+  Future<String> createOrder(
+    String baseUrl,
+    String authData, {
+    required int planId,
+    required String period,
+  }) async {
+    try {
+      final orders = await fetchOrders(baseUrl, authData);
+      for (final order in orders) {
+        final status = order['status'];
+        final tradeNo = order['trade_no']?.toString();
+        if (status == 0 && tradeNo != null && tradeNo.isNotEmpty) {
+          try {
+            await cancelOrder(baseUrl, authData, tradeNo);
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    final response = await _dio.post<dynamic>(
+      _buildUrl(baseUrl, '/api/v1/user/order/save'),
+      data: {'plan_id': planId, 'period': period},
+      options: Options(headers: {'Authorization': authData}),
+    );
+    final body = response.data;
+    if (body is Map) {
+      final data = body['data'];
+      if (data is String && data.isNotEmpty) {
+        return data;
+      }
+      if (data is Map && data['trade_no'] != null) {
+        return data['trade_no'].toString();
+      }
+    }
+    throw V2BoardException(
+      _extractErrorMessage(body, '下单失败'),
+      statusCode: response.statusCode,
+    );
+  }
+
+  /// 订单列表。
+  Future<List<Map<String, dynamic>>> fetchOrders(
+    String baseUrl,
+    String authData,
+  ) async {
+    final body = await _getJson(baseUrl, '/api/v1/user/order/fetch', authData);
+    return _asMapList(body);
+  }
+
+  /// 取消未支付订单。
+  Future<void> cancelOrder(
+    String baseUrl,
+    String authData,
+    String tradeNo,
+  ) async {
+    final response = await _dio.post<dynamic>(
+      _buildUrl(baseUrl, '/api/v1/user/order/cancel'),
+      data: {'trade_no': tradeNo},
+      options: Options(headers: {'Authorization': authData}),
+    );
+    if (response.statusCode != 200) {
+      throw V2BoardException(
+        _extractErrorMessage(response.data, '取消订单失败'),
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
+  /// 可用支付方式。
+  Future<List<Map<String, dynamic>>> getPaymentMethods(
+    String baseUrl,
+    String authData,
+  ) async {
+    final body = await _getJson(
+      baseUrl,
+      '/api/v1/user/order/getPaymentMethod',
+      authData,
+    );
+    return _asMapList(body);
+  }
+
+  /// 用户订阅信息（流量/到期/套餐）。
+  Future<Map<String, dynamic>?> getUserInfo(
+    String baseUrl,
+    String authData,
+  ) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        _buildUrl(baseUrl, '/api/v1/user/getSubscribe'),
+        options: Options(headers: {'Authorization': authData}),
+      );
+      final data = response.data;
+      if (response.statusCode == 200 && data is Map && data['data'] is Map) {
+        return Map<String, dynamic>.from(data['data'] as Map);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 结算，返回面板生成的支付信息（type: -1 表示直接开通成功）。
+  Future<Map<String, dynamic>> checkout(
+    String baseUrl,
+    String authData, {
+    required String tradeNo,
+    required int method,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      _buildUrl(baseUrl, '/api/v1/user/order/checkout'),
+      data: {'trade_no': tradeNo, 'method': method},
+      options: Options(headers: {'Authorization': authData}),
+    );
+    final body = response.data;
+    if (body is Map) {
+      final data = body['data'];
+      if (data is Map) {
+        return Map<String, dynamic>.from(data);
+      }
+      return Map<String, dynamic>.from(body);
+    }
+    throw V2BoardException(
+      _extractErrorMessage(body, '获取支付信息失败'),
+      statusCode: response.statusCode,
+    );
+  }
+
+  /// GET 并解开 v2board 的 `{data: ...}` 外壳（非 200 时抛 V2BoardException）。
+  Future<dynamic> _getJson(
+    String baseUrl,
+    String path,
+    String authData,
+  ) async {
+    final response = await _dio.get<dynamic>(
+      _buildUrl(baseUrl, path),
+      options: Options(headers: {'Authorization': authData}),
+    );
+    if (response.statusCode != 200) {
+      throw V2BoardException(
+        _extractErrorMessage(response.data, '请求失败'),
+        statusCode: response.statusCode,
+      );
+    }
+    final body = response.data;
+    if (body is Map) {
+      return body['data'];
+    }
+    return null;
+  }
+
+  /// POST 且面板返回 `data == true` 视为成功。
+  Future<void> _postExpectTrue(
+    String baseUrl,
+    String path,
+    String authData, {
+    required Map<String, dynamic> data,
+    required String fallbackMessage,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      _buildUrl(baseUrl, path),
+      data: data,
+      options: Options(headers: {'Authorization': authData}),
+    );
+    final body = response.data;
+    if (response.statusCode == 200 && body is Map && body['data'] == true) {
+      return;
+    }
+    throw V2BoardException(
+      _extractErrorMessage(body, fallbackMessage),
+      statusCode: response.statusCode,
+    );
+  }
+
+  List<Map<String, dynamic>> _asMapList(dynamic data) {
+    if (data is List) {
+      return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return const [];
+  }
+
   /// 生成 TOTP + 时效 + 签名的专属订阅链接。
   String buildSignedSubscribeUrl({
     required String baseUrl,

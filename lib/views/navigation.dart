@@ -1,5 +1,9 @@
 import 'package:fl_clash/common/app_ports.dart';
 import 'package:fl_clash/enum/enum.dart';
+import 'package:fl_clash/features/v2board/account_view.dart';
+import 'package:fl_clash/features/v2board/notices_screen.dart';
+import 'package:fl_clash/features/v2board/shop_screen.dart';
+import 'package:fl_clash/features/v2board/tickets_screen.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/ui/icons/app_glyphs.dart';
 import 'package:fl_clash/views/views.dart';
@@ -30,6 +34,30 @@ class Navigation implements NavigationPort {
         glyph: AppGlyphs.profiles,
         label: PageLabel.profiles,
         builder: (_) => const ProfilesView(),
+      ),
+      NavigationItem(
+        glyph: AppGlyphs.sparkle,
+        label: PageLabel.store,
+        builder: (_) => const V2BoardShopView(),
+        modes: const [NavigationItemMode.desktop, NavigationItemMode.more],
+      ),
+      NavigationItem(
+        glyph: AppGlyphs.info,
+        label: PageLabel.notices,
+        builder: (_) => const V2BoardNoticesView(),
+        modes: const [NavigationItemMode.desktop, NavigationItemMode.more],
+      ),
+      NavigationItem(
+        glyph: AppGlyphs.compose,
+        label: PageLabel.tickets,
+        builder: (_) => const V2BoardTicketsView(),
+        modes: const [NavigationItemMode.desktop, NavigationItemMode.more],
+      ),
+      NavigationItem(
+        glyph: AppGlyphs.account,
+        label: PageLabel.account,
+        builder: (_) => const V2BoardAccountView(),
+        modes: const [NavigationItemMode.desktop, NavigationItemMode.more],
       ),
       NavigationItem(
         glyph: AppGlyphs.requests,
