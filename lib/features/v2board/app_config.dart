@@ -15,9 +15,16 @@ class AppConfig {
   static const heartbeatPath = '/api/v1/user/heartbeat';
   static const reportDomainPath = '/api/v1/user/reportDomain';
 
-  /// 订阅入口。注意：设备签名里的 path 必须是这个**字面量**，
-  /// 面板侧验签用的也是同一个字面量（与随机化的 subscribe_path 无关）。
-  static const subscribePath = '/api/v1/client/subscribe';
+  /// 订阅入口的默认路径（仅作兜底展示）。
+  ///
+  /// 生产面板的 `subscribe_path` 已随机化，实际订阅地址必须用面板下发的
+  /// `subscribe_url`（`/api/v1/user/getSubscribe` 返回），不能自己拼。
+  static const defaultSubscribePath = '/api/v1/client/subscribe';
+
+  /// 设备签名 payload 里的 path 必须是这个**字面量**：
+  /// 面板 `ClientController::verifyAppSubscribe()` 写死按它验签，
+  /// 与随机化的 `subscribe_path` 无关。
+  static const signPayloadPath = '/api/v1/client/subscribe';
 
   /// 订阅/API 请求里的专属客户端标记，面板据此走 TOTP + 签名校验。
   static const appMarker = 'flclash';

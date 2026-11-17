@@ -12,7 +12,6 @@ import 'client.dart';
 import 'domain_probe_service.dart';
 import 'heartbeat_service.dart';
 import 'security_report_service.dart';
-import 'totp.dart';
 
 /// Dawn 客户端登录态 + 设备/订阅/心跳/域名池的唯一状态源。
 ///
@@ -129,7 +128,7 @@ class V2BoardState extends ChangeNotifier {
         commonPrint.log('[V2Board] 设备注册失败，回退普通订阅: $e');
       }
 
-      // 优先用专属订阅，其次面板下发的 appSubscribe，最后普通订阅
+      // 优先用专属订阅（TOTP 签名），没有设备时退回普通订阅
       _store.setSubscribeUrl(await _resolveSubscribeUrl());
 
       await _afterLogin(importProfile: true, replaceExisting: true);
@@ -149,9 +148,18 @@ class V2BoardState extends ChangeNotifier {
 
   Future<String> _resolveSubscribeUrl() async {
     final authData = _store.authData;
-    final token = _store.token;
     if (authData == null || authData.isEmpty) {
       throw const V2BoardException('登录状态已失效，请重新登录');
+    }
+    // 订阅地址必须用面板下发的 subscribe_url：生产 subscribe_path 已随机化，
+    // 自己拼 /api/v1/client/subscribe 会 404（签名 payload 才用字面量）。
+    final subscribeInfo = await v2BoardClient.getSubscribe(
+      _store.apiBaseUrl,
+      authData,
+    );
+    final subscribeUrl = subscribeInfo?['subscribe_url']?.toString() ?? '';
+    if (subscribeUrl.isEmpty) {
+      throw const V2BoardException('面板未返回订阅链接');
     }
     final deviceId = _store.deviceId;
     final totpSecret = _store.totpSecret;
@@ -159,30 +167,13 @@ class V2BoardState extends ChangeNotifier {
         deviceId.isNotEmpty &&
         totpSecret != null &&
         totpSecret.isNotEmpty) {
-      return Totp.buildSignedSubscribeUrl(
-        baseUrl: _store.apiBaseUrl,
-        token: token ?? '',
+      return v2BoardClient.buildSignedSubscribeUrl(
+        subscribeUrl: subscribeUrl,
         deviceId: deviceId,
         totpSecret: totpSecret,
       );
     }
-    final deviceSubscribe = deviceId == null || deviceId.isEmpty
-        ? null
-        : await v2BoardClient.appSubscribe(
-            _store.apiBaseUrl,
-            authData,
-            deviceId: deviceId,
-          );
-    if (deviceSubscribe != null && deviceSubscribe.isNotEmpty) {
-      return deviceSubscribe;
-    }
-    if (token == null || token.isEmpty) {
-      throw const V2BoardException('面板未返回订阅 token');
-    }
-    return v2BoardClient.buildFallbackSubscribeUrl(
-      baseUrl: _store.apiBaseUrl,
-      token: token,
-    );
+    return v2BoardClient.buildPlainSubscribeUrl(subscribeUrl);
   }
 
   /// 登录成功后的统一收尾：生成订阅、启动心跳/探测、导入 profile。
@@ -215,10 +206,39 @@ class V2BoardState extends ChangeNotifier {
     try {
       await addDawnProfileFromLink(url, replace: replaceExisting);
     } catch (e) {
+      final fallbackUrl = _subscribeUrlOnApiHost(url);
+      if (fallbackUrl != null) {
+        commonPrint.log('[V2Board] 订阅域名不可用，改用当前 API 域名重试: $e');
+        try {
+          await addDawnProfileFromLink(fallbackUrl, replace: replaceExisting);
+          return;
+        } catch (e2) {
+          _lastError = '订阅已获取，但导入失败：$e2';
+          notifyListeners();
+          return;
+        }
+      }
       commonPrint.log('[V2Board] 导入订阅失败: $e');
       _lastError = '订阅已获取，但导入失败：$e';
       notifyListeners();
     }
+  }
+
+  /// 面板的 `subscribe_url` 是配置里的域名池随机挑一个下发的，可能有域名已失效。
+  /// 失败时保留原 path/query（含随机化的 subscribe_path 和 token），换成当前可用的
+  /// API 域名重试；签名只跟 path 有关，换域名不影响验签。
+  String? _subscribeUrlOnApiHost(String url) {
+    final uri = Uri.tryParse(url);
+    final api = Uri.tryParse(_store.apiBaseUrl);
+    if (uri == null || api == null) {
+      return null;
+    }
+    if (uri.host.isEmpty || api.host.isEmpty || uri.host == api.host) {
+      return null;
+    }
+    final authority = api.hasPort ? '${api.host}:${api.port}' : api.host;
+    final query = uri.hasQuery ? '?${uri.query}' : '';
+    return '${api.scheme}://$authority${uri.path}$query';
   }
 
   void _onHeartbeatResult(V2BoardHeartbeatResult result) {

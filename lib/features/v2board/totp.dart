@@ -38,32 +38,33 @@ class Totp {
         .toString();
   }
 
-  /// 生成带 TOTP + 时效 + 签名的专属订阅链接。
+  /// 在面板下发的订阅链接上追加 TOTP 时效签名，得到「专属订阅」。
+  ///
+  /// 注意两点：
+  /// - 请求地址（scheme/host/随机化的 path/token）必须原样沿用面板给的
+  ///   [subscribeUrl]，不能自己拼 `/api/v1/client/subscribe`；
+  /// - 签名 payload 里的 path 反而是字面量 [AppConfig.signPayloadPath]。
   static String buildSignedSubscribeUrl({
-    required String baseUrl,
-    required String token,
+    required String subscribeUrl,
     required String deviceId,
     required String totpSecret,
     Duration ttl = const Duration(minutes: 2),
   }) {
-    final normalized = AppConfig.normalizeUrl(baseUrl);
     final expires = DateTime.now().add(ttl).millisecondsSinceEpoch ~/ 1000;
     final code = generate(totpSecret);
-    final payload = '$deviceId|$expires|${AppConfig.subscribePath}';
+    final payload = '$deviceId|$expires|${AppConfig.signPayloadPath}';
     final signature = sign(totpSecret, payload);
-    final uri = Uri.parse('$normalized${AppConfig.subscribePath}')
-        .replace(
-          queryParameters: {
-            'token': token,
-            'flag': 'meta',
-            'app': AppConfig.appMarker,
-            'device_id': deviceId,
-            'code': code,
-            'expires': '$expires',
-            'sign': signature,
-          },
-        );
-    return uri.toString();
+    final uri = Uri.parse(subscribeUrl.trim());
+    final query = Map<String, String>.from(uri.queryParameters);
+    query.addAll({
+      'flag': 'meta',
+      'app': AppConfig.appMarker,
+      'device_id': deviceId,
+      'code': code,
+      'expires': '$expires',
+      'sign': signature,
+    });
+    return uri.replace(queryParameters: query).toString();
   }
 
   static Uint8List _bigEndian8(int value) {

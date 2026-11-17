@@ -505,35 +505,25 @@ class V2BoardClient {
     return const [];
   }
 
-  /// 生成 TOTP + 时效 + 签名的专属订阅链接。
+  /// 生成 TOTP + 时效 + 签名的专属订阅链接（基于面板下发的 subscribe_url）。
   String buildSignedSubscribeUrl({
-    required String baseUrl,
-    required String token,
+    required String subscribeUrl,
     required String deviceId,
     required String totpSecret,
   }) {
     return Totp.buildSignedSubscribeUrl(
-      baseUrl: baseUrl,
-      token: token,
+      subscribeUrl: subscribeUrl,
       deviceId: deviceId,
       totpSecret: totpSecret,
     );
   }
 
-  /// 普通回退订阅链接（没有设备注册时使用）。
-  String buildFallbackSubscribeUrl({
-    required String baseUrl,
-    required String token,
-  }) {
-    final uri = Uri.parse('${AppConfig.normalizeUrl(baseUrl)}${AppConfig.subscribePath}')
-        .replace(
-          queryParameters: {
-            'token': token,
-            'flag': 'meta',
-            'app': AppConfig.appMarker,
-          },
-        );
-    return uri.toString();
+  /// 普通订阅链接：原样保留面板下发的地址，只补 `flag=meta`。
+  String buildPlainSubscribeUrl(String subscribeUrl) {
+    final uri = Uri.parse(subscribeUrl.trim());
+    final query = Map<String, String>.from(uri.queryParameters);
+    query.putIfAbsent('flag', () => 'meta');
+    return uri.replace(queryParameters: query).toString();
   }
 
   Map<String, dynamic> _requireDataMap(
