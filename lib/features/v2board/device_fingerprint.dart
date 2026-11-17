@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
 
@@ -48,6 +49,9 @@ class DeviceFingerprint {
   }
 
   static Future<DeviceFingerprint> _collectImpl() async {
+    if (Platform.isAndroid) {
+      return _collectAndroid();
+    }
     if (!Platform.isWindows) {
       return const DeviceFingerprint(
         mac: '-',
@@ -100,5 +104,33 @@ Write-Output ($guid + '|' + $mac + '|' + $disk)
   static String _clean(String value) {
     final s = value.trim();
     return s.isEmpty ? '-' : s;
+  }
+
+  /// Android 端没有可用的网卡 MAC/磁盘序列号，用 ANDROID_ID 作为主标识
+  /// （同一设备+同一签名密钥下稳定，卸载重装不变，Android 8+ 全版本可用）。
+  static Future<DeviceFingerprint> _collectAndroid() async {
+    try {
+      final info = await DeviceInfoPlugin().androidInfo;
+      final androidId = info.id.trim().toUpperCase();
+      if (androidId.isEmpty || androidId == 'UNKNOWN') {
+        return const DeviceFingerprint(
+          mac: '-',
+          diskSerial: '-',
+          machineGuid: '-',
+        );
+      }
+      return DeviceFingerprint(
+        mac: 'ANDROID-$androidId',
+        diskSerial: androidId,
+        machineGuid: androidId,
+      );
+    } catch (e) {
+      commonPrint.log('[Fingerprint] Android 采集异常: $e', logLevel: LogLevel.warning);
+      return const DeviceFingerprint(
+        mac: '-',
+        diskSerial: '-',
+        machineGuid: '-',
+      );
+    }
   }
 }
