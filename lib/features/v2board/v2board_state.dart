@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:fl_clash/common/common.dart';
-import 'package:fl_clash/providers/providers.dart';
+import 'package:fl_clash/core/v2board_profile.dart';
+
 import 'package:fl_clash/state.dart';
 import 'package:flutter/foundation.dart';
 
@@ -83,7 +84,8 @@ class V2BoardState extends ChangeNotifier {
       return;
     }
 
-    await _afterLogin(importProfile: true);
+    // 已有 Dawn 订阅就用旧的（离线配置本身可用），避免每次启动重复导入/丢失节点选择
+    await _afterLogin(importProfile: !hasDawnProfile());
     _initialized = true;
     notifyListeners();
   }
@@ -130,7 +132,7 @@ class V2BoardState extends ChangeNotifier {
       // 优先用专属订阅，其次面板下发的 appSubscribe，最后普通订阅
       _store.setSubscribeUrl(await _resolveSubscribeUrl());
 
-      await _afterLogin(importProfile: true);
+      await _afterLogin(importProfile: true, replaceExisting: true);
       _loginCompleted = true;
       _notice = device == null ? '登录成功（设备注册失败，已回退普通订阅）' : '登录成功';
     } on V2BoardException catch (e) {
@@ -184,7 +186,10 @@ class V2BoardState extends ChangeNotifier {
   }
 
   /// 登录成功后的统一收尾：生成订阅、启动心跳/探测、导入 profile。
-  Future<void> _afterLogin({required bool importProfile}) async {
+  Future<void> _afterLogin({
+    required bool importProfile,
+    bool replaceExisting = false,
+  }) async {
     final url = _store.subscribeUrl ?? await _resolveSubscribeUrl();
     _store.setSubscribeUrl(url);
 
@@ -199,16 +204,16 @@ class V2BoardState extends ChangeNotifier {
     notifyListeners();
 
     if (importProfile) {
-      await _importProfile(url);
+      await _importProfile(url, replaceExisting: replaceExisting);
     }
   }
 
-  Future<void> _importProfile(String url) async {
+  Future<void> _importProfile(
+    String url, {
+    bool replaceExisting = false,
+  }) async {
     try {
-      final container = globalState.container;
-      await container
-          .read(profilesActionProvider.notifier)
-          .addProfileFromLink(url, label: 'Dawn');
+      await addDawnProfileFromLink(url, replace: replaceExisting);
     } catch (e) {
       commonPrint.log('[V2Board] 导入订阅失败: $e');
       _lastError = '订阅已获取，但导入失败：$e';
@@ -234,7 +239,7 @@ class V2BoardState extends ChangeNotifier {
     try {
       final url = await _resolveSubscribeUrl();
       _store.setSubscribeUrl(url);
-      await _importProfile(url);
+      await _importProfile(url, replaceExisting: true);
       _notice = '订阅已刷新';
     } catch (e) {
       _lastError = '刷新订阅失败：$e';
@@ -296,6 +301,11 @@ class V2BoardState extends ChangeNotifier {
       _lastError = message;
     }
     _initialized = true;
+    // 会话失效时退出到根路由，否则用户可能停在 tools 等子页看不到登录页
+    final navigator = globalState.navigatorKey.currentState;
+    if (navigator != null && navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
     notifyListeners();
   }
 
