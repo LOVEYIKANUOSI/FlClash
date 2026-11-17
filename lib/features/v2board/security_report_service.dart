@@ -32,7 +32,7 @@ class SecurityReportService {
   }) async {
     final authStore = AuthStore();
     await authStore.init();
-    final baseUrl = authStore.panelUrl;
+    final baseUrl = authStore.apiBaseUrl;
     final authData = authStore.authData;
     if (authData == null || authData.isEmpty) {
       return null;

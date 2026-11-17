@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:fl_clash/common/common.dart';
+
 import 'auth_store.dart';
 import 'client.dart';
 import 'security_report_service.dart';
@@ -63,12 +65,23 @@ class HeartbeatService {
       if (authData == null || authData.isEmpty) {
         return;
       }
-      final result = await v2BoardClient.heartbeat(
-        authStore.panelUrl,
-        authData,
-        deviceId: authStore.deviceId,
-      );
+      V2BoardHeartbeatResult result;
+      try {
+        result = await v2BoardClient.heartbeat(
+          authStore.apiBaseUrl,
+          authData,
+          deviceId: authStore.deviceId,
+        );
+      } catch (e) {
+        // 网络/DNS 失败也要回调，否则账户页永远停在「尚未上报」且没有任何提示。
+        commonPrint.log('[Heartbeat] 上报失败: $e');
+        result = const V2BoardHeartbeatResult(ok: false);
+      }
       lastResult = result;
+      commonPrint.log(
+        '[Heartbeat] ok=${result.ok} status=${result.statusCode} '
+        'interval=${result.intervalSeconds}',
+      );
       final interval = result.intervalSeconds;
       if (interval != null && interval > 0) {
         updateInterval(Duration(seconds: interval));

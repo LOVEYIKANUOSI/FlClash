@@ -32,7 +32,7 @@ class _V2BoardAccountViewState extends State<V2BoardAccountView> {
         return;
       }
       final userInfo = await v2BoardClient.getUserInfo(
-        _authStore.panelUrl,
+        _authStore.apiBaseUrl,
         authData,
       );
       if (mounted) {

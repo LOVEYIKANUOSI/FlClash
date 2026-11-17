@@ -11,14 +11,19 @@ class DomainProbeResult {
   final String domain;
   final bool reachable;
   final int latencyMs;
+  final int statusCode;
   final String? error;
 
   const DomainProbeResult({
     required this.domain,
     required this.reachable,
     required this.latencyMs,
+    this.statusCode = 0,
     this.error,
   });
+
+  /// Cloudflare 502/504 这类「连得上但源站挂了」也算不可用。
+  bool get healthy => reachable && statusCode > 0 && statusCode < 500;
 }
 
 class DomainSwitchOutcome {
@@ -79,12 +84,13 @@ class DomainProbeService {
     final stopwatch = Stopwatch()..start();
     final target = '${AppConfig.normalizeDomain(domain)}/';
     try {
-      await _dio.get(target, options: Options(followRedirects: false));
+      final response = await _dio.get(target, options: Options(followRedirects: false));
       stopwatch.stop();
       return DomainProbeResult(
         domain: domain,
         reachable: true,
         latencyMs: stopwatch.elapsedMilliseconds,
+        statusCode: response.statusCode ?? 0,
       );
     } catch (e) {
       stopwatch.stop();
@@ -105,8 +111,20 @@ class DomainProbeService {
     final deviceId = authStore.deviceId;
 
     final active = authStore.activeDomain;
+    // 面板没配置客户端域名时会下发 client.example.invalid 之类的占位符，直接忽略。
     final domains = pool.isEmpty ? [active] : pool;
-    final results = await Future.wait(domains.map(probe));
+    final probeTargets =
+        domains.where(AppConfig.isUsableDomain).toList(growable: false);
+    if (probeTargets.isEmpty) {
+      return _finish(
+        const DomainSwitchOutcome(
+          all: [],
+          reachable: [],
+          error: '暂无可用客户端域名',
+        ),
+      );
+    }
+    final results = await Future.wait(probeTargets.map(probe));
     final reachable = results.where((r) => r.reachable).toList();
 
     // active 域名可达 → 无需切换

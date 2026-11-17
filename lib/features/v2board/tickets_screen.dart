@@ -32,7 +32,7 @@ class _V2BoardTicketsViewState extends State<V2BoardTicketsView> {
     });
     try {
       await _authStore.init();
-      final baseUrl = _authStore.panelUrl;
+      final baseUrl = _authStore.apiBaseUrl;
       final authData = _authStore.authData;
       if (authData == null) {
         if (mounted) {
@@ -202,7 +202,7 @@ class _CreateTicketFormState extends State<_CreateTicketForm> {
     try {
       await widget.authStore.init();
       await v2BoardClient.createTicket(
-        widget.authStore.panelUrl,
+        widget.authStore.apiBaseUrl,
         widget.authStore.authData!,
         subject: subject,
         level: 0,
@@ -319,7 +319,7 @@ class _V2BoardTicketDetailViewState extends State<V2BoardTicketDetailView> {
         return;
       }
       final detail = await v2BoardClient.fetchTicketDetail(
-        _authStore.panelUrl,
+        _authStore.apiBaseUrl,
         authData,
         _ticketId,
       );
@@ -345,7 +345,7 @@ class _V2BoardTicketDetailViewState extends State<V2BoardTicketDetailView> {
     try {
       await _authStore.init();
       await v2BoardClient.replyTicket(
-        _authStore.panelUrl,
+        _authStore.apiBaseUrl,
         _authStore.authData!,
         id: _ticketId,
         message: message,
@@ -373,7 +373,7 @@ class _V2BoardTicketDetailViewState extends State<V2BoardTicketDetailView> {
     try {
       await _authStore.init();
       await v2BoardClient.closeTicket(
-        _authStore.panelUrl,
+        _authStore.apiBaseUrl,
         _authStore.authData!,
         _ticketId,
       );

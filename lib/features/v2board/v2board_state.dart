@@ -136,11 +136,14 @@ class V2BoardState extends ChangeNotifier {
       _notice = device == null ? '登录成功（设备注册失败，已回退普通订阅）' : '登录成功';
     } on V2BoardException catch (e) {
       _lastError = e.message;
-      if (e.isUnauthorized) {
-        await _store.clear();
-      }
+      // 登录链路失败时清掉已落盘的半成品会话：否则 authData 已存在，
+      // 门禁会误以为已登录直接放行，但心跳/探测/订阅都没启动（表现为「尚未上报」）。
+      await _store.clearSession();
+      _refreshFromStore();
     } catch (e) {
       _lastError = '登录失败：$e';
+      await _store.clearSession();
+      _refreshFromStore();
     } finally {
       _setBusy(false);
     }
@@ -161,6 +164,11 @@ class V2BoardState extends ChangeNotifier {
     if (subscribeUrl.isEmpty) {
       throw const V2BoardException('面板未返回订阅链接');
     }
+    // 面板的 subscribe_url 是在「订阅域名池」里随机挑一个下发的（配置见
+    // subscribe_url 逗号分割）。这些域名可能已失效（实测 cdn-bing 返回 504），
+    // 所以先确认它的 host 可用；不可用就保留 path/query（随机 path + token），
+    // 换成刚验证过可用的 API 域名——签名只认 path，不认 host。
+    final usableSubscribeUrl = await _ensureSubscribeHost(subscribeUrl);
     final deviceId = _store.deviceId;
     final totpSecret = _store.totpSecret;
     if (deviceId != null &&
@@ -168,12 +176,41 @@ class V2BoardState extends ChangeNotifier {
         totpSecret != null &&
         totpSecret.isNotEmpty) {
       return v2BoardClient.buildSignedSubscribeUrl(
-        subscribeUrl: subscribeUrl,
+        subscribeUrl: usableSubscribeUrl,
         deviceId: deviceId,
         totpSecret: totpSecret,
       );
     }
-    return v2BoardClient.buildPlainSubscribeUrl(subscribeUrl);
+    return v2BoardClient.buildPlainSubscribeUrl(usableSubscribeUrl);
+  }
+
+  /// 确认面板下发的订阅 host 真的能用（占位符 / Cloudflare 5xx 都不算）。
+  /// 不可用时把同一个 path/query 换到 apiBaseUrl 上返回。
+  Future<String> _ensureSubscribeHost(String subscribeUrl) async {
+    final uri = Uri.tryParse(subscribeUrl);
+    if (uri == null || uri.host.isEmpty) {
+      return subscribeUrl;
+    }
+    if (!AppConfig.isUsableDomain(uri.host)) {
+      commonPrint.log('[V2Board] 订阅域名是占位符，改用 API 域名: ${uri.host}');
+      return _subscribeUrlOnApiHost(subscribeUrl) ?? subscribeUrl;
+    }
+    final apiUri = Uri.tryParse(_store.apiBaseUrl);
+    if (apiUri != null && apiUri.host == uri.host) {
+      return subscribeUrl;
+    }
+    try {
+      final result = await DomainProbeService.instance.probe(uri.host);
+      if (result.healthy) {
+        return subscribeUrl;
+      }
+      commonPrint.log(
+        '[V2Board] 订阅域名不可用(状态=${result.statusCode})，改用 API 域名: ${uri.host}',
+      );
+      return _subscribeUrlOnApiHost(subscribeUrl) ?? subscribeUrl;
+    } catch (_) {
+      return _subscribeUrlOnApiHost(subscribeUrl) ?? subscribeUrl;
+    }
   }
 
   /// 登录成功后的统一收尾：生成订阅、启动心跳/探测、导入 profile。

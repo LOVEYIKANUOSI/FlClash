@@ -33,7 +33,7 @@ class _V2BoardNoticesViewState extends State<V2BoardNoticesView> {
     });
     try {
       await _authStore.init();
-      final baseUrl = _authStore.panelUrl;
+      final baseUrl = _authStore.apiBaseUrl;
       final authData = _authStore.authData;
       if (authData == null) {
         if (mounted) {

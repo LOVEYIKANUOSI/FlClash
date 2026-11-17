@@ -74,4 +74,38 @@ class AppConfig {
     }
     return 'https://$value';
   }
+
+  /// 判断面板下发的域名能不能真的拿来做 API 地址。
+  ///
+  /// 面板 `client_default_domain` / `CdnDomain(kind=client)` 没配置时，会下发
+  /// 占位符 `client.example.invalid`（见 config/v2board.php 的默认值）。
+  /// 客户端如果拿它当 active 域名，后续 checkLogin/心跳/getSubscribe 全部 DNS 失败。
+  static bool isUsableDomain(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) {
+      return false;
+    }
+    final host = Uri.tryParse(normalizeDomain(value))?.host.toLowerCase() ?? '';
+    if (host.isEmpty || !host.contains('.')) {
+      return false;
+    }
+    const reservedSuffixes = ['.invalid', '.example', '.test', '.localhost'];
+    for (final suffix in reservedSuffixes) {
+      if (host.endsWith(suffix)) {
+        return false;
+      }
+    }
+    const reservedHosts = [
+      'example.com',
+      'example.org',
+      'example.net',
+      'localhost',
+    ];
+    for (final reserved in reservedHosts) {
+      if (host == reserved || host.endsWith('.$reserved')) {
+        return false;
+      }
+    }
+    return true;
+  }
 }

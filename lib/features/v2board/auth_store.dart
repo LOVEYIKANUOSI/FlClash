@@ -45,28 +45,30 @@ class AuthStore {
       _prefs?.getInt(_heartbeatIntervalKey) ??
       AppConfig.defaultHeartbeatInterval.inSeconds;
 
-  /// 当前使用的对接域名（未下发时用面板地址对应的 host）。
+  /// 当前使用的对接域名（未下发/下发的是占位符时用面板地址对应的 host）。
   String get activeDomain {
     final saved = _prefs?.getString(_activeDomainKey);
-    if (saved != null && saved.isNotEmpty) {
+    if (saved != null && AppConfig.isUsableDomain(saved)) {
       return saved;
     }
     return Uri.tryParse(panelUrl)?.host ?? '';
   }
 
   /// 面板 API 实际使用的 baseUrl：
-  /// 面板下发过 active 域名就用它（带 scheme），否则用用户填写的面板地址。
+  /// 面板下发过可用的 active 域名就用它（带 scheme），否则用用户填写的面板地址。
   String get apiBaseUrl {
     final saved = _prefs?.getString(_activeDomainKey);
-    if (saved != null && saved.isNotEmpty) {
+    if (saved != null && AppConfig.isUsableDomain(saved)) {
       return AppConfig.normalizeDomain(saved);
     }
     return AppConfig.normalizeUrl(panelUrl);
   }
 
-  /// 客户端专属域名池。
+  /// 客户端专属域名池（过滤掉面板没配置时下发的占位符）。
   List<String> get domainPool =>
-      _prefs?.getStringList(_domainPoolKey) ?? const [];
+      (_prefs?.getStringList(_domainPoolKey) ?? const [])
+          .where(AppConfig.isUsableDomain)
+          .toList();
 
   bool get hasSession {
     final auth = authData;
@@ -119,17 +121,35 @@ class AuthStore {
     if (prefs == null) {
       return;
     }
-    await prefs.setString(_activeDomainKey, activeDomain);
-    await prefs.setStringList(_domainPoolKey, domainPool);
+    // 面板域名池没配置时下发的是占位符，不能落盘当 API 域名用。
+    final usablePool =
+        domainPool.where(AppConfig.isUsableDomain).toList(growable: false);
+    final String usableActive;
+    if (AppConfig.isUsableDomain(activeDomain)) {
+      usableActive = activeDomain.trim();
+    } else if (usablePool.isNotEmpty) {
+      usableActive = usablePool.first;
+    } else {
+      usableActive = '';
+    }
+    if (usableActive.isEmpty) {
+      await prefs.remove(_activeDomainKey);
+    } else {
+      await prefs.setString(_activeDomainKey, usableActive);
+    }
+    if (usablePool.isEmpty) {
+      await prefs.remove(_domainPoolKey);
+    } else {
+      await prefs.setStringList(_domainPoolKey, usablePool);
+    }
   }
 
-  Future<void> clear() async {
+  /// 只清会话与设备信息，保留面板地址/邮箱（登录页可以回填）。
+  Future<void> clearSession() async {
     final prefs = _prefs;
     if (prefs == null) {
       return;
     }
-    await prefs.remove(_panelUrlKey);
-    await prefs.remove(_emailKey);
     await prefs.remove(_authDataKey);
     await prefs.remove(_tokenKey);
     await prefs.remove(_deviceIdKey);
@@ -138,5 +158,15 @@ class AuthStore {
     await prefs.remove(_domainPoolKey);
     await prefs.remove(_heartbeatIntervalKey);
     _subscribeUrl = null;
+  }
+
+  Future<void> clear() async {
+    await clearSession();
+    final prefs = _prefs;
+    if (prefs == null) {
+      return;
+    }
+    await prefs.remove(_panelUrlKey);
+    await prefs.remove(_emailKey);
   }
 }

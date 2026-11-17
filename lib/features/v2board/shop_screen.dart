@@ -44,7 +44,7 @@ class _V2BoardShopViewState extends State<V2BoardShopView> {
     });
     try {
       await _authStore.init();
-      final baseUrl = _authStore.panelUrl;
+      final baseUrl = _authStore.apiBaseUrl;
       final authData = _authStore.authData;
       if (authData == null) {
         if (mounted) {
@@ -141,7 +141,7 @@ class _V2BoardShopViewState extends State<V2BoardShopView> {
     if (period == null || !mounted) {
       return;
     }
-    final baseUrl = _authStore.panelUrl;
+    final baseUrl = _authStore.apiBaseUrl;
     final authData = _authStore.authData;
     final planId = (plan['id'] as num?)?.toInt();
     if (authData == null || planId == null) {
@@ -201,7 +201,7 @@ class _V2BoardShopViewState extends State<V2BoardShopView> {
   }
 
   Future<void> _resetTraffic() async {
-    final baseUrl = _authStore.panelUrl;
+    final baseUrl = _authStore.apiBaseUrl;
     final authData = _authStore.authData;
     final plan = _userInfo?['plan'];
     if (authData == null || plan is! Map) {
