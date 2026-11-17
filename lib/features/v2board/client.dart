@@ -53,7 +53,9 @@ class V2BoardDomainReportResult {
 /// 与后端约定（见 docs/client-api.md）：
 /// - 登录：POST /api/v1/passport/auth/login → data.auth_data / data.token
 /// - 设备注册：POST /api/v1/user/device/register → data.device_id/totp_secret/...
-/// - 专属订阅：POST /api/v1/user/appSubscribe → data.subscribe_url
+/// - 普通订阅：GET /api/v1/user/getSubscribe → data.subscribe_url
+///   （生产 subscribe_path 随机化，订阅地址必须用面板下发的，不能自己拼）
+/// - 专属订阅：在上面 URL 追加 device_id/code/expires/sign（见 totp.dart）
 /// - 心跳：POST /api/v1/user/heartbeat → data.heartbeat_interval
 /// - 域名上报：POST /api/v1/user/reportDomain → data.active/domain_pool
 class V2BoardClient {
@@ -153,7 +155,11 @@ class V2BoardClient {
     return data;
   }
 
-  /// 面板下发的设备专属订阅链接（普通订阅的进阶版）。
+  /// 面板 `/api/v1/user/appSubscribe` 下发的设备订阅链接。
+  ///
+  /// ⚠️ 它带 `app=flclash&device_id` 但**没有 code/expires/sign**，直接拿去拉订阅
+  /// 会被 `verifyAppSubscribe` 403。专属订阅实际由 [Totp.buildSignedSubscribeUrl]
+  /// 在 `getSubscribe` 下发的普通链接上追加签名参数生成，此方法仅保留接口完整性。
   Future<String?> appSubscribe(
     String baseUrl,
     String authData, {
