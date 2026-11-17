@@ -2,6 +2,7 @@ import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/models/models.dart';
+import 'package:fl_clash/features/v2board/account_view.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/ui/icons/icons.dart';
 import 'package:fl_clash/views/about.dart';
@@ -39,6 +40,7 @@ class _ToolViewState extends ConsumerState<ToolsView> {
     return generateSection(
       title: context.appLocalizations.other,
       items: [
+        const _DawnAccountItem(),
         const _DisclaimerItem(),
         if (enableDeveloperMode) const _DeveloperItem(),
         const _InfoItem(),
@@ -220,9 +222,21 @@ class _DisclaimerItem extends StatelessWidget {
   }
 }
 
+class _DawnAccountItem extends StatelessWidget {
+  const _DawnAccountItem();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListItem.open(
+      leading: const GlyphIcon(AppGlyphs.profiles),
+      title: const Text('Dawn 账户'),
+      widget: const V2BoardAccountView(),
+    );
+  }
+}
+
 class _InfoItem extends StatelessWidget {
   const _InfoItem();
-
   @override
   Widget build(BuildContext context) {
     return ListItem.open(
