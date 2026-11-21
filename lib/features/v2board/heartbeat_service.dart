@@ -74,7 +74,9 @@ class HeartbeatService {
         );
       } catch (e) {
         // 网络/DNS 失败也要回调，否则账户页永远停在「尚未上报」且没有任何提示。
-        commonPrint.log('[Heartbeat] 上报失败: $e');
+        commonPrint.log(
+          '[Heartbeat] 上报失败: ${sanitizeV2BoardLog(e)}',
+        );
         result = const V2BoardHeartbeatResult(ok: false);
       }
       lastResult = result;

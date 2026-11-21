@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:fl_clash/common/common.dart';
+import 'package:flutter/foundation.dart';
 
 import 'app_config.dart';
+import 'panel_endpoint.dart';
 import 'totp.dart';
 
 /// V2Board 接口调用失败时抛出，message 直接展示给用户。
@@ -11,7 +13,17 @@ class V2BoardException implements Exception {
   final String message;
   final int? statusCode;
 
-  const V2BoardException(this.message, {this.statusCode});
+  /// 网络/面板不可达类失败（不是账号或业务错误）。
+  ///
+  /// 登录链路据此区分「面板暂时挂了」和「账号密码错了」：前者绝不能清会话
+  /// 或把用户踢回登录页，否则面板抖一下全体客户端掉线。
+  final bool isNetwork;
+
+  const V2BoardException(
+    this.message, {
+    this.statusCode,
+    this.isNetwork = false,
+  });
 
   /// 认证失效（需要重新登录）。
   bool get isUnauthorized => statusCode == 401 || statusCode == 403;
@@ -59,7 +71,16 @@ class V2BoardDomainReportResult {
 /// - 心跳：POST /api/v1/user/heartbeat → data.heartbeat_interval
 /// - 域名上报：POST /api/v1/user/reportDomain → data.active/domain_pool
 class V2BoardClient {
-  V2BoardClient._();
+  V2BoardClient._() {
+    // 面板请求的多通道容灾：失败自动换备用域名 → 再换用户节点代理。
+    // 挂在拦截器层，所有接口（登录/心跳/订阅/商城/工单）自动生效。
+    _dio.interceptors.add(
+      PanelFailoverInterceptor(
+        directDio: () => _dio,
+        proxyDio: () => PanelEndpoint.instance.proxyDio,
+      ),
+    );
+  }
 
   static final V2BoardClient instance = V2BoardClient._();
 
@@ -78,16 +99,32 @@ class V2BoardClient {
     return '${AppConfig.normalizeUrl(baseUrl)}$path';
   }
 
+  /// 仅测试用：替换底层 HTTP 适配器，模拟主域名不可达 / 备用域名可用。
+  @visibleForTesting
+  void debugSetHttpClientAdapter(HttpClientAdapter adapter) {
+    _dio.httpClientAdapter = adapter;
+  }
+
   /// 登录，返回 auth_data（后续请求的 Authorization 头）和 token。
   Future<V2BoardLoginResult> login({
     required String baseUrl,
     required String email,
     required String password,
   }) async {
-    final response = await _dio.post<dynamic>(
-      _buildUrl(baseUrl, AppConfig.loginPath),
-      data: {'email': email.trim(), 'password': password},
-    );
+    final Response<dynamic> response;
+    try {
+      response = await _dio.post<dynamic>(
+        _buildUrl(baseUrl, AppConfig.loginPath),
+        data: {'email': email.trim(), 'password': password},
+      );
+    } on DioException {
+      // 直连 + 备用域名 + 节点代理全部失败才算「面板不可达」。
+      // 这类失败不能清会话/踢登录页（面板短时故障不该让所有客户端掉线）。
+      throw const V2BoardException(
+        '面板暂时无法连接，请检查网络后重试',
+        isNetwork: true,
+      );
+    }
     final data = _requireDataMap(response, fallbackMessage: '登录失败');
     final authData = data['auth_data']?.toString();
     final token = data['token']?.toString();
@@ -98,7 +135,14 @@ class V2BoardClient {
   }
 
   /// 校验当前登录态是否仍然有效。
-  Future<bool> checkLogin(String baseUrl, String authData) async {
+  ///
+  /// 三态返回：
+  /// - `true`：面板确认已登录
+  /// - `false`：面板明确说未登录（401/403，token 失效或被踢）
+  /// - `null`：**无法判断**（超时、断网、5xx、域名失效）——调用方必须沿用本地
+  ///   会话，不能据此把人踢回登录页。历史上这里把异常一律当成 false，
+  ///   网络一抖就清会话，是「登录太频繁」的主要原因之一。
+  Future<bool?> checkLogin(String baseUrl, String authData) async {
     try {
       final response = await _dio.get<dynamic>(
         _buildUrl(baseUrl, AppConfig.checkLoginPath),
@@ -106,8 +150,14 @@ class V2BoardClient {
       );
       final data = _requireDataMap(response, fallbackMessage: '检查登录状态失败');
       return data['is_login'] == true;
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) {
+        return false;
+      }
+      return null;
     } catch (_) {
-      return false;
+      return null;
     }
   }
 

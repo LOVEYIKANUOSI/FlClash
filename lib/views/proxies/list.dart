@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
+import 'package:fl_clash/features/v2board/v2board_state.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/ui/icons/icons.dart';
@@ -37,12 +38,21 @@ class _ProxiesListViewState extends ConsumerState<ProxiesListView> {
   void initState() {
     super.initState();
     _controller = sheetScrollController(context);
+    v2BoardState.addListener(_handleV2BoardChanged);
   }
 
   @override
   void dispose() {
+    v2BoardState.removeListener(_handleV2BoardChanged);
     _controller.dispose();
     super.dispose();
+  }
+
+  /// 登录态/设备信息变化后刷新列表。专属订阅（整体下发）不再需要合并占位节点。
+  void _handleV2BoardChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _handleChange(String groupName) {
@@ -58,10 +68,11 @@ class _ProxiesListViewState extends ConsumerState<ProxiesListView> {
 
   GroupOffsets _getGroupOffsets() {
     final state = ref.read(proxiesListStateProvider);
+    final groups = state.groups;
     final offsets = <double>[];
     final rowExtent = getRowExtent(state.proxyCardType);
     final columnOffsets = List.filled(_groupColumns, 0.0);
-    for (final (index, group) in state.groups.indexed) {
+    for (final (index, group) in groups.indexed) {
       final column = index % _groupColumns;
       offsets.add(columnOffsets[column]);
       columnOffsets[column] += listHeaderHeight + _gap;
@@ -70,7 +81,7 @@ class _ProxiesListViewState extends ConsumerState<ProxiesListView> {
         columnOffsets[column] += _rowsExtent(rowCount, rowExtent);
       }
     }
-    return GroupOffsets(state.groups, offsets);
+    return GroupOffsets(groups, offsets);
   }
 
   double _getGroupOffset(String groupName) {
@@ -134,12 +145,9 @@ class _ProxiesListViewState extends ConsumerState<ProxiesListView> {
   }
 
   void _scrollToGroupSelected(String groupName) {
-    final cardType = ref.read(proxiesListStateProvider).proxyCardType;
-    final proxies = ref
-        .read(proxiesListStateProvider)
-        .groups
-        .getGroup(groupName)
-        ?.all;
+    final state = ref.read(proxiesListStateProvider);
+    final cardType = state.proxyCardType;
+    final proxies = state.groups.getGroup(groupName)?.all;
     if (proxies == null) {
       return;
     }

@@ -390,6 +390,8 @@ class ProxiesAction extends _$ProxiesAction {
   }
 
   Future<void> _runDelayTests(List<_DelayTestBatch> batches) async {
+    // 测试节点前强制开启并检查 IPv6（产品要求，客户端不提供 IPv6 开关）。
+    await Ipv6Support.instance.ensureBeforeUse();
     final targets = _resolveDelayTestTargets(batches);
     if (targets.isEmpty) {
       return;

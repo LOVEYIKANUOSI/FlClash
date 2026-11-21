@@ -1,0 +1,14 @@
+{
+    "data": {
+        "version_name": "0.9.4",
+        "version_code": 2026111901,
+        "min_version_code": 0,
+        "file_name": "dawn-fixed.exe",
+        "file_size": 17,
+        "sha256": "9e1c2a78532514251baf7a525f4c493fd4520b5f0d7cd363e412cdd7a657efa9",
+        "signature": "Tc10a55IB2qzxeooHnM4JRyxmaa4iilbDyA6CRD1LR8Y2QOWSNrO1O/0GTX1quchJI9fscy/OOnwcqimLe9yQdqP4UZZz2lgzwUFpEVLsy00DexOR5fFl899d3LDGigBjoO8Ri0bKm1rzTxYz4V+PEetyQubx/RWgaAZRp6CbH17lGD/rsU1+ZXe6XhgW85azBSX3cpv8v5h+e3s/5ZemSsn/9iDIyl8FJgFCj4yiYge3oVeLYqjjoS8psyAVku2RddyI5Y5C203WRUHkZX1YrWx82AASvPw6gqKr0loJ2wDkMnOlHdu+KDBHBvG6MSRarNSpG1XUXMvyJK3V2X2yA==",
+        "download_url": "https://dl.example.com/dawn/Dawn-0.9.4-setup.exe",
+        "release_notes": "更新链路测试版本",
+        "mandatory": false
+    }
+}

@@ -45,6 +45,9 @@ class ProfilesAction extends _$ProfilesAction {
     ]) {
       final profile = ref.read(profilesProvider).getProfile(id);
       if (profile == null || !profile.autoUpdate) continue;
+      // Dawn 专属订阅的 URL 是 2 分钟有效的 TOTP 签名，直接按 URL 下载必然
+      // 403；它由 V2BoardState 定时重新签发后重新导入（_startDawnRefreshTask）。
+      if (profile.label == dawnProfileLabel) continue;
       final isNotNeedUpdate = profile.lastUpdateDate
           ?.add(profile.autoUpdateDuration)
           .isBeforeNow;
@@ -403,6 +406,22 @@ class ProfilesAction extends _$ProfilesAction {
   Future<Profile> _download(Profile profile) {
     return profile.update(
       validate: (path, key) => _core.validateProfile(path, key),
+      transform: profile.label == dawnProfileLabel
+          ? (data) async {
+              // 专属订阅（enc=1）下发的正文是 AES-256-GCM 密文 JSON，
+              // 必须用本机 device_id 解出 YAML 再交给核心校验。
+              if (!SubscribeCipher.looksEncrypted(data)) {
+                return data;
+              }
+              final deviceId =
+                  Uri.tryParse(profile.url)?.queryParameters['device_id'] ?? '';
+              final clear = SubscribeCipher.instance.decode(data, deviceId);
+              if (clear == null) {
+                throw const MessageException('专属订阅解密失败，请重新登录或更新客户端');
+              }
+              return clear;
+            }
+          : null,
     );
   }
 

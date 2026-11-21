@@ -74,6 +74,7 @@ dependencies:
     path: plugins/prism_ui
   setup:
     path: plugins/setup
+  pointycastle: ^4.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

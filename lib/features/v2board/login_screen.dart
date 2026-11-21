@@ -16,6 +16,11 @@ class _V2BoardLoginScreenState extends State<V2BoardLoginScreen> {
   late final TextEditingController _panelController;
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
+  /// 是否勾选「自动登录」。默认勾上——用户反馈登录太频繁；
+  /// 之前开启过的话也保持勾选状态一致。
+  bool _autoLogin = true;
+
   String? _localError;
 
   @override
@@ -24,6 +29,8 @@ class _V2BoardLoginScreenState extends State<V2BoardLoginScreen> {
     _panelController = TextEditingController(
       text: v2BoardState.panelUrl,
     );
+    _emailController.text = v2BoardState.email;
+    _autoLogin = true;
     v2BoardState.addListener(_handleStateChanged);
   }
 
@@ -64,6 +71,7 @@ class _V2BoardLoginScreenState extends State<V2BoardLoginScreen> {
       email: email,
       password: password,
       panelUrl: panel,
+      autoLogin: _autoLogin,
     );
   }
 
@@ -137,7 +145,14 @@ class _V2BoardLoginScreenState extends State<V2BoardLoginScreen> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 8),
+                  _AutoLoginRow(
+                    value: _autoLogin,
+                    enabled: !busy,
+                    expiresAt: v2BoardState.autoLoginExpiresAt,
+                    onChanged: (value) => setState(() => _autoLogin = value),
+                  ),
+                  const SizedBox(height: 12),
                   FilledButton(
                     onPressed: busy ? null : _submit,
                     child: Text(
@@ -159,6 +174,68 @@ class _V2BoardLoginScreenState extends State<V2BoardLoginScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 「自动登录」勾选行：勾上后密码进系统加密存储，1 年内启动免输入。
+class _AutoLoginRow extends StatelessWidget {
+  const _AutoLoginRow({
+    required this.value,
+    required this.enabled,
+    required this.expiresAt,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final bool enabled;
+  final DateTime? expiresAt;
+  final ValueChanged<bool> onChanged;
+
+  static String _formatDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = context.colorScheme;
+    final expiresAt = this.expiresAt;
+    final hint = (value && expiresAt != null)
+        ? '已加密保存在本机，${_formatDate(expiresAt)} 前无需再登录'
+        : '勾选后密码加密保存在本机，1 年内启动无需再输入';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Checkbox(
+          value: value,
+          onChanged: enabled ? (checked) => onChanged(checked ?? false) : null,
+        ),
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: enabled ? () => onChanged(!value) : null,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '自动登录（1 年内免密）',
+                  style: AppTextStyle.subheadline.of(context),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  hint,
+                  style: AppTextStyle.caption1.of(context).copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

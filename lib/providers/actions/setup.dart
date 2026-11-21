@@ -159,6 +159,12 @@ class SetupAction extends _$SetupAction {
   }
 
   Future<bool> setRunning(bool running, {bool initialize = false}) {
+    // 使用节点（启动内核）前强制开启 IPv6，并后台检查本机 IPv6 可用性；
+    // 产品要求 IPv6 始终开启，设置页不再提供开关。
+    if (running) {
+      Ipv6Support.instance.enforce();
+      Ipv6Support.instance.checkAfterStart();
+    }
     if (running && !initialize && !ref.read(initProvider)) {
       return Future.value(true);
     }

@@ -187,6 +187,16 @@ class Preferences {
     await sharedPreferencesIns?.setString(bootRecordKey, json.encode(record));
   }
 
+  Future<bool> getShowHidden() async {
+    final preferences = await _store.value;
+    return preferences?.getBool('nav_show_hidden') ?? false;
+  }
+
+  Future<void> setShowHidden(bool value) async {
+    final preferences = await _store.value;
+    await preferences?.setBool('nav_show_hidden', value);
+  }
+
   Future<void> clearPreferences() async {
     final sharedPreferencesIns = await _store.value;
     await sharedPreferencesIns?.clear();

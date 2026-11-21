@@ -40,8 +40,9 @@ class SecurityReportService {
 
     final fingerprint = await DeviceFingerprint.collect();
     commonPrint.log(
-      '[Security] 指纹: mac=${fingerprint.mac} disk=${fingerprint.diskSerial} '
-      'guid=${fingerprint.machineGuid}',
+      '[Security] 指纹: mac=${maskSecret(fingerprint.mac)} '
+      'disk=${maskSecret(fingerprint.diskSerial)} '
+      'guid=${maskSecret(fingerprint.machineGuid)}',
     );
     if (!fingerprint.isCollected || fingerprint.mac == '-') {
       commonPrint.log('[Security] 注册跳过：网卡码无效，无法注册设备');
@@ -79,10 +80,8 @@ class SecurityReportService {
       final deviceId = device['device_id']?.toString();
       final totpSecret = device['totp_secret']?.toString();
       final interval = device['heartbeat_interval'];
-      if (deviceId != null &&
-          deviceId.isNotEmpty &&
-          totpSecret != null &&
-          totpSecret.isNotEmpty) {
+      final hasSecret = totpSecret != null && totpSecret.isNotEmpty;
+      if (deviceId != null && deviceId.isNotEmpty && hasSecret) {
         await authStore.saveDevice(
           deviceId: deviceId,
           totpSecret: totpSecret,
@@ -98,10 +97,16 @@ class SecurityReportService {
         final active = (device['active'] ?? pool.first).toString();
         await authStore.saveDomains(activeDomain: active, domainPool: pool);
       }
-      commonPrint.log('[Security] 注册成功: deviceId=$deviceId');
+      commonPrint.log(
+        '[Security] 注册成功: deviceId=${maskSecret(deviceId ?? '')} '
+        '签名密钥=${hasSecret ? '已下发' : '缺失(会退回普通订阅)'}',
+      );
       return device;
     } catch (e) {
-      commonPrint.log('[Security] 注册异常: $e', logLevel: LogLevel.warning);
+      commonPrint.log(
+        '[Security] 注册异常: ${sanitizeV2BoardLog(e)}',
+        logLevel: LogLevel.warning,
+      );
       return null;
     }
   }

@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/features/v2board/account_view.dart';
+import 'package:fl_clash/features/v2board/v2board_state.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/ui/icons/icons.dart';
 import 'package:fl_clash/views/about.dart';
@@ -41,6 +44,8 @@ class _ToolViewState extends ConsumerState<ToolsView> {
       title: context.appLocalizations.other,
       items: [
         const _DawnAccountItem(),
+        const _AdvancedModeItem(),
+        const _LogoutItem(),
         const _DisclaimerItem(),
         if (enableDeveloperMode) const _DeveloperItem(),
         const _InfoItem(),
@@ -231,6 +236,60 @@ class _DawnAccountItem extends StatelessWidget {
       leading: const GlyphIcon(AppGlyphs.profiles),
       title: const Text('Dawn 账户'),
       widget: const V2BoardAccountView(),
+    );
+  }
+}
+
+class _AdvancedModeItem extends ConsumerStatefulWidget {
+  const _AdvancedModeItem();
+
+  @override
+  ConsumerState<_AdvancedModeItem> createState() => _AdvancedModeItemState();
+}
+
+class _AdvancedModeItemState extends ConsumerState<_AdvancedModeItem> {
+  @override
+  Widget build(BuildContext context) {
+    return ListItem(
+      leading: const GlyphIcon(AppGlyphs.tools),
+      title: const Text('高级模式'),
+      subtitle: const Text('显示配置、请求、资源等入口'),
+      trailing: Switch(
+        value: HiddenItems.show,
+        onChanged: (value) async {
+          await HiddenItems.set(value);
+          ref.invalidate(navigationItemsStateProvider);
+          setState(() {});
+        },
+      ),
+    );
+  }
+}
+
+class _LogoutItem extends StatelessWidget {
+  const _LogoutItem();
+
+  @override
+  Widget build(BuildContext context) {
+    final errorColor = context.colorScheme.error;
+    return ListItem(
+      leading: const GlyphIcon(AppGlyphs.block),
+      title: Text('退出登录', style: TextStyle(color: errorColor)),
+      subtitle: const Text('清除本机登录信息并关闭应用'),
+      onTap: () async {
+        final confirmed = await dialogs.showMessage(
+          title: '退出登录',
+          message: const TextSpan(text: '将清除本机登录信息并关闭应用，确定退出吗？'),
+          confirmText: '确定退出',
+          cancelText: '取消',
+          destructive: true,
+        );
+        if (confirmed != true) {
+          return;
+        }
+        await v2BoardState.logout();
+        exit(0);
+      },
     );
   }
 }

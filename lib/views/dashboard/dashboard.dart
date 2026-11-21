@@ -15,6 +15,7 @@ import 'layout.dart';
 import 'style.dart';
 import 'widget_registry.dart';
 import 'widgets/core_status_button.dart';
+import 'widgets/subscription_bar.dart';
 import 'widgets/widgets.dart';
 
 // Narrower columns leave a pair of service cells too tight for a status, so
@@ -22,6 +23,8 @@ import 'widgets/widgets.dart';
 const _servicePairColumnMin = 290.0;
 
 const _maxColumnWidth = 440.0;
+
+const _subscriptionBarHeight = 68.0;
 
 class DashboardView extends ConsumerStatefulWidget {
   const DashboardView({super.key, this.platform});
@@ -183,6 +186,10 @@ class _DesktopDashboard extends StatelessWidget {
             child: Column(
               spacing: gap,
               children: [
+                const SizedBox(
+                  height: _subscriptionBarHeight,
+                  child: RepaintBoundary(child: SubscriptionBar()),
+                ),
                 sized(
                   topHeight,
                   const RepaintBoundary(child: CurrentOutboundCard()),
@@ -213,6 +220,10 @@ class _DesktopDashboard extends StatelessWidget {
           );
         }
         final rows = [
+          const SizedBox(
+            height: _subscriptionBarHeight,
+            child: RepaintBoundary(child: SubscriptionBar()),
+          ),
           sized(
             topHeight,
             row(const [
@@ -242,10 +253,11 @@ class _DesktopDashboard extends StatelessWidget {
         ];
         final rowsHeight =
             padding.vertical +
+            _subscriptionBarHeight +
             topHeight +
             controlHeight +
             middleHeight +
-            gap * 3;
+            gap * 4;
         final tablesFit = constraints.maxHeight >= rowsHeight + tablesHeight;
         final fills = constraints.maxHeight >= rowsHeight + summaryHeight;
         return SingleChildScrollView(
@@ -345,6 +357,9 @@ class _MobileDashboard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     UpdateStatusSlot(gap: gap),
+                    SizedBox(height: gap),
+                    const RepaintBoundary(child: SubscriptionBar()),
+                    SizedBox(height: gap),
                     Column(
                       spacing: gap,
                       children: [

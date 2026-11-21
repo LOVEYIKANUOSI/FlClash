@@ -20,6 +20,12 @@ add_executable(${BINARY_NAME} WIN32
 # that need different build settings.
 apply_standard_settings(${BINARY_NAME})
 
+# Dawn: 客户端固定以管理员身份运行（系统 IPv6 等需要管理员权限）。
+# MSBuild 默认会给链接器传 /MANIFESTUAC:level='asInvoker'，与
+# runner.exe.manifest 里的 requireAdministrator 冲突（mt.exe c1010001），
+# 这里用同等级别覆盖，最后一个 /MANIFESTUAC 生效。
+target_link_options(${BINARY_NAME} PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
+
 # Add preprocessor definitions for the build version.
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION=\"${FLUTTER_VERSION}\"")
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_MAJOR=${FLUTTER_VERSION_MAJOR}")

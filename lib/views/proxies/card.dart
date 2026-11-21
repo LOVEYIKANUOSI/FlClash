@@ -195,7 +195,10 @@ class ProxyCard extends ConsumerWidget {
             ref,
             inUse: inUse,
             pinned: pinned,
-            addable: _isAddableToLocal(proxy, isCustomProfile: isCustomProfile),
+            addable: _isAddableToLocal(
+              proxy,
+              isCustomProfile: isCustomProfile,
+            ),
           ),
           child: Card(
             radius: AppCorner.lg,

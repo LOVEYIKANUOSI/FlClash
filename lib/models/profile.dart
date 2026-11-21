@@ -183,10 +183,17 @@ extension ProfileExtension on Profile {
     return _getFile();
   }
 
-  Future<Profile> update({required ValidateConfig validate}) async {
+  Future<Profile> update({
+    required ValidateConfig validate,
+    Future<Uint8List> Function(Uint8List data)? transform,
+  }) async {
     final response = await request.getFileResponseForUrl(url);
     final disposition = response.headers.value('content-disposition');
     final userinfo = response.headers.value('subscription-userinfo');
+    var data = response.data ?? Uint8List(0);
+    if (transform != null) {
+      data = await transform(data);
+    }
     return copyWith(
       label: label.takeFirstValid([
         getFileNameForDisposition(disposition),
@@ -194,7 +201,7 @@ extension ProfileExtension on Profile {
       ]),
       subscriptionInfo: SubscriptionInfo.formHString(userinfo),
     ).saveFile(
-      decompressUnlabeled(response.data ?? Uint8List(0)),
+      decompressUnlabeled(data),
       validate: validate,
     );
   }

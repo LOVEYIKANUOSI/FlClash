@@ -1,8 +1,8 @@
 import 'package:fl_clash/common/app_ports.dart';
+import 'package:fl_clash/common/hidden_items.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/features/v2board/account_view.dart';
-import 'package:fl_clash/features/v2board/notices_screen.dart';
-import 'package:fl_clash/features/v2board/shop_screen.dart';
+import 'package:fl_clash/features/v2board/notices_screen.dart';import 'package:fl_clash/features/v2board/shop_screen.dart';
 import 'package:fl_clash/features/v2board/tickets_screen.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/ui/icons/app_glyphs.dart';
@@ -30,11 +30,12 @@ class Navigation implements NavigationPort {
             ? [NavigationItemMode.mobile, NavigationItemMode.desktop]
             : [],
       ),
-      NavigationItem(
-        glyph: AppGlyphs.profiles,
-        label: PageLabel.profiles,
-        builder: (_) => const ProfilesView(),
-      ),
+      if (HiddenItems.show)
+        NavigationItem(
+          glyph: AppGlyphs.profiles,
+          label: PageLabel.profiles,
+          builder: (_) => const ProfilesView(),
+        ),
       NavigationItem(
         glyph: AppGlyphs.sparkle,
         label: PageLabel.store,
@@ -59,24 +60,27 @@ class Navigation implements NavigationPort {
         builder: (_) => const V2BoardAccountView(),
         modes: const [NavigationItemMode.desktop, NavigationItemMode.more],
       ),
-      NavigationItem(
-        glyph: AppGlyphs.requests,
-        label: PageLabel.requests,
-        builder: (_) => const RequestsView(),
-        modes: [NavigationItemMode.desktop, NavigationItemMode.moreFull],
-      ),
-      NavigationItem(
-        glyph: AppGlyphs.dns,
-        label: PageLabel.dns,
-        builder: (_) => const DnsQueriesView(),
-        modes: [NavigationItemMode.moreFull],
-      ),
-      NavigationItem(
-        glyph: AppGlyphs.resources,
-        label: PageLabel.resources,
-        builder: (_) => const ResourcesView(),
-        modes: [NavigationItemMode.more],
-      ),
+      if (HiddenItems.show)
+        NavigationItem(
+          glyph: AppGlyphs.requests,
+          label: PageLabel.requests,
+          builder: (_) => const RequestsView(),
+          modes: [NavigationItemMode.desktop, NavigationItemMode.moreFull],
+        ),
+      if (HiddenItems.show)
+        NavigationItem(
+          glyph: AppGlyphs.dns,
+          label: PageLabel.dns,
+          builder: (_) => const DnsQueriesView(),
+          modes: [NavigationItemMode.moreFull],
+        ),
+      if (HiddenItems.show)
+        NavigationItem(
+          glyph: AppGlyphs.resources,
+          label: PageLabel.resources,
+          builder: (_) => const ResourcesView(),
+          modes: [NavigationItemMode.more],
+        ),
       NavigationItem(
         glyph: AppGlyphs.logs,
         label: PageLabel.logs,

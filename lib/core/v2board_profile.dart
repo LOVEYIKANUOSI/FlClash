@@ -11,7 +11,11 @@ const dawnProfileLabel = 'Dawn';
 
 bool hasDawnProfile() {
   final profiles = globalState.container.read(profilesProvider);
-  return profiles.any((profile) => profile.label == dawnProfileLabel);
+  // 订阅链接解密失败（换了机器/换了用户/数据损坏）时 url 会退化成空串：
+  // 这种 Dawn 配置既不能刷新也不能用，视为没有，登录后会重新签发。
+  return profiles.any(
+    (profile) => profile.label == dawnProfileLabel && profile.url.isNotEmpty,
+  );
 }
 
 /// 拉取链接并生成一条 Dawn 订阅配置；[replace] 为真时先删掉旧的 Dawn 配置，
@@ -27,7 +31,9 @@ Future<void> addDawnProfileFromLink(String url, {bool replace = false}) async {
       try {
         await notifier.deleteProfile(id);
       } catch (e) {
-        commonPrint.log('[V2Board] 清理旧订阅配置失败: $e');
+        commonPrint.log(
+          '[V2Board] 清理旧订阅配置失败: ${sanitizeV2BoardLog(e)}',
+        );
       }
     }
   }

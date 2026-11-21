@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:fl_clash/features/v2board/auth_store.dart';
 import 'package:fl_clash/features/v2board/client.dart';
+import 'package:fl_clash/features/v2board/device_fingerprint.dart';
+import 'package:fl_clash/features/v2board/domain_probe_service.dart';
 import 'package:fl_clash/features/v2board/v2board_state.dart';
 import 'package:fl_clash/ui/icons/icons.dart';
 import 'package:fl_clash/ui/ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 /// Dawn 账户页：展示登录态/设备/域名池，并提供刷新订阅、心跳、探测、登出。
@@ -16,12 +21,41 @@ class V2BoardAccountView extends StatefulWidget {
 class _V2BoardAccountViewState extends State<V2BoardAccountView> {
   final AuthStore _authStore = AuthStore();
   Map<String, dynamic>? _userInfo;
+  DeviceFingerprint? _fingerprint;
+  DomainSwitchOutcome? _probeOutcome;
+  bool _copied = false;
+  Timer? _copiedTimer;
 
   @override
   void initState() {
     super.initState();
     v2BoardState.addListener(_handleStateChanged);
     _loadUserInfo();
+    _loadFingerprint();
+    _probeOutcome = DomainProbeService.instance.lastOutcome;
+  }
+
+  Future<void> _loadFingerprint() async {
+    try {
+      final fingerprint = await DeviceFingerprint.collect();
+      if (mounted) {
+        setState(() => _fingerprint = fingerprint);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _copySubscribeUrl(String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) {
+      return;
+    }
+    setState(() => _copied = true);
+    _copiedTimer?.cancel();
+    _copiedTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _copied = false);
+      }
+    });
   }
 
   Future<void> _loadUserInfo() async {
@@ -43,13 +77,16 @@ class _V2BoardAccountViewState extends State<V2BoardAccountView> {
 
   @override
   void dispose() {
+    _copiedTimer?.cancel();
     v2BoardState.removeListener(_handleStateChanged);
     super.dispose();
   }
 
   void _handleStateChanged() {
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _probeOutcome = DomainProbeService.instance.lastOutcome;
+      });
     }
   }
 
@@ -154,16 +191,119 @@ class _V2BoardAccountViewState extends State<V2BoardAccountView> {
     );
   }
 
+  Widget _subscribeLinkTile(String url) {
+    return ListItem(
+      leading: const GlyphIcon(AppGlyphs.copy),
+      title: const Text('专属订阅链接'),
+      subtitle: Text(
+        _copied ? '已复制到剪贴板' : url,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: const GlyphIcon(AppGlyphs.copy),
+      onTap: () => _copySubscribeUrl(url),
+    );
+  }
+
+  List<Widget> _deviceItems() {
+    final fingerprint = _fingerprint;
+    final deviceId = v2BoardState.deviceId;
+    return [
+      _infoTile(
+        glyph: AppGlyphs.target,
+        title: '设备 ID',
+        subtitle: deviceId.isEmpty ? '未注册' : deviceId,
+      ),
+      _infoTile(
+        glyph: AppGlyphs.cpu,
+        title: '网卡码',
+        subtitle: (fingerprint?.mac.isNotEmpty ?? false)
+            ? fingerprint!.mac
+            : '暂未采集',
+      ),
+      _infoTile(
+        glyph: AppGlyphs.cpu,
+        title: '硬盘码',
+        subtitle: (fingerprint?.diskSerial.isNotEmpty ?? false)
+            ? fingerprint!.diskSerial
+            : '暂未采集',
+      ),
+      _infoTile(
+        glyph: AppGlyphs.cpu,
+        title: '机器码',
+        subtitle: (fingerprint?.machineGuid.isNotEmpty ?? false)
+            ? fingerprint!.machineGuid
+            : '暂未采集',
+      ),
+    ];
+  }
+
+  List<Widget> _probeItems() {
+    final outcome = _probeOutcome;
+    if (outcome == null) {
+      return [
+        _infoTile(
+          glyph: AppGlyphs.dns,
+          title: '尚未探测',
+          subtitle: '点「立即探测并切换域名」或等待自动探测',
+        ),
+      ];
+    }
+    return [
+      _infoTile(
+        glyph: AppGlyphs.refresh,
+        title: '切换结果',
+        subtitle: outcome.newActive == null
+            ? '未切换'
+            : '已切换到 ${outcome.newActive}',
+      ),
+      for (final result in outcome.all)
+        _infoTile(
+          glyph: AppGlyphs.dns,
+          title: result.domain,
+          subtitle: result.reachable ? '可达（${result.latencyMs}ms）' : '不可达',
+        ),
+      if (outcome.error != null)
+        _infoTile(
+          glyph: AppGlyphs.warning,
+          title: '提示',
+          subtitle: outcome.error!,
+        ),
+    ];
+  }
+
+  List<Widget> _poolItems(List<String> pool, String activeDomain) {
+    if (pool.isEmpty) {
+      return [
+        _infoTile(
+          glyph: AppGlyphs.resources,
+          title: '尚未下发域名池',
+          subtitle: '当前使用面板地址',
+        ),
+      ];
+    }
+    return [
+      for (final domain in pool)
+        _infoTile(
+          glyph: AppGlyphs.resources,
+          title: domain == activeDomain ? '当前' : '备用',
+          subtitle: domain,
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = v2BoardState;
     final colorScheme = context.colorScheme;
-    final pool = state.domainPool;
     return Scaffold(
       title: 'Dawn 账户',
       isLoading: state.busy,
       body: ListView(
-        padding: const EdgeInsets.only(top: 8, bottom: 32),
+        padding: EdgeInsets.only(
+          top: context.sectionsTopPadding,
+          bottom: 32,
+        ),
         children: [
           generateSection(
             title: '订阅',
@@ -183,23 +323,27 @@ class _V2BoardAccountViewState extends State<V2BoardAccountView> {
                     ? '未下发'
                     : state.activeDomain,
               ),
-              _infoTile(
-                glyph: AppGlyphs.target,
-                title: '设备 ID',
-                subtitle: state.deviceId.isEmpty ? '未注册' : state.deviceId,
-              ),
+              if ((state.subscribeUrl ?? '').isNotEmpty)
+                _subscribeLinkTile(state.subscribeUrl!),
               _infoTile(
                 glyph: AppGlyphs.clock,
                 title: '心跳',
                 subtitle:
                     '每 ${state.heartbeatIntervalSeconds}s · ${_heartbeatLabel()}',
               ),
-              _infoTile(
-                glyph: AppGlyphs.resources,
-                title: '域名池',
-                subtitle: pool.isEmpty ? '未下发（使用面板地址）' : pool.join('、'),
-              ),
             ],
+          ),
+          generateSection(
+            title: '本机设备',
+            items: _deviceItems(),
+          ),
+          generateSection(
+            title: '域名探测',
+            items: _probeItems(),
+          ),
+          generateSection(
+            title: '域名池',
+            items: _poolItems(state.domainPool, state.activeDomain),
           ),
           if (state.notice != null) ...[
             const SizedBox(height: 12),

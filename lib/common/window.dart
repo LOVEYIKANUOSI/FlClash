@@ -56,6 +56,8 @@ class Window implements WindowPort {
     await desktopWindow.setMinimumSize(const Size(380, 400));
     await _windowPosition(props);
     await desktopWindow.setPreventClose(true);
+    // 窗口置顶默认关闭：标题栏的图钉只切换本次运行，启动时不恢复置顶状态。
+    await desktopWindow.setAlwaysOnTop(false);
   }
 
   Future<Size> _defaultSize() async {

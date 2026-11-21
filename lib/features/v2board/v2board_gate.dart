@@ -42,12 +42,27 @@ class _V2BoardGateState extends State<V2BoardGate> {
 class _Splash extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final colorScheme = context.colorScheme;
     return ColoredBox(
-      color: context.colorScheme.surface,
+      color: colorScheme.surface,
       child: Center(
-        child: Text(
-          'Dawn',
-          style: AppTextStyle.largeTitle.of(context, emphasized: true),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Dawn',
+              style: AppTextStyle.largeTitle.of(context, emphasized: true),
+            ),
+            if (v2BoardState.autoLoginRunning) ...[
+              const SizedBox(height: 12),
+              Text(
+                '正在自动登录…',
+                style: AppTextStyle.caption1.of(context).copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

@@ -72,7 +72,12 @@ class _V2BoardNoticesViewState extends State<V2BoardNoticesView> {
           : _notices.isEmpty
           ? const Center(child: Text('暂无公告'))
           : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                context.contentTopPadding,
+                16,
+                32,
+              ),
               itemCount: _notices.length,
               itemBuilder: (_, index) => _NoticeCard(notice: _notices[index]),
             ),

@@ -10,6 +10,7 @@ import 'package:fl_clash/common/tray.dart';
 import 'package:fl_clash/common/window.dart';
 import 'package:fl_clash/database/database.dart';
 import 'package:fl_clash/enum/enum.dart';
+import 'package:fl_clash/features/network/ipv6_support.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
@@ -124,6 +125,12 @@ class Bootstrap {
           darkSeed: dynamicColor.darkSeed,
           accentColor: dynamicColor.accentColor,
         );
+    // 订阅链接（profiles.url）落盘加密：旧版本明文行在这里一次性迁移。
+    final migratedProfileUrls =
+        await database.profilesDao.encryptLegacyProfileUrls();
+    if (migratedProfileUrls > 0) {
+      commonPrint.log('[V2Board] 已加密迁移 $migratedProfileUrls 条订阅链接');
+    }
     final profiles = await database.profilesDao.query().get();
     container.read(profilesProvider.notifier).reorder(profiles);
     await AppLocalizations.load(
@@ -148,12 +155,17 @@ class Bootstrap {
   ProviderContainer get _container => globalState.container;
 
   Future<void> _initApp() async {
+    await HiddenItems.init();
+    // IPv6 强制开启（产品要求，客户端不提供开关）。
+    Ipv6Support.instance.enforce();
+    Ipv6Support.instance.logElevation();
     unawaited(_container.read(systemActionProvider.notifier).updateTray());
     unawaited(
       _container.read(profilesActionProvider.notifier).autoUpdateProfiles(),
     );
     unawaited(clearUpdateDownloads());
-    unawaited(_container.read(commonActionProvider.notifier).autoCheckUpdate());
+    // 客户端更新检查移到登录成功之后（V2BoardState._startServices → UpdateService），
+    // 面板清单优先、GitHub 兜底；未登录不检查。
     unawaited(
       autoLaunch?.updateStatus(_container.read(appSettingProvider).autoLaunch),
     );

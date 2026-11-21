@@ -104,7 +104,10 @@ class _V2BoardTicketsViewState extends State<V2BoardTicketsView> {
           : _error != null
           ? _TicketsError(message: _error!, onRetry: _loadData)
           : ListView(
-              padding: const EdgeInsets.only(top: 8, bottom: 32),
+              padding: EdgeInsets.only(
+                top: context.sectionsTopPadding,
+                bottom: 32,
+              ),
               children: [
                 generateSection(
                   title: '支持',
@@ -224,56 +227,42 @@ class _CreateTicketFormState extends State<_CreateTicketForm> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = context.colorScheme;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 460),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+    return AlertDialog(
+      title: '新建工单',
+      hasFields: true,
+      actions: [
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.of(context).pop(false),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: _submitting ? null : _submit,
+          child: Text(_submitting ? '提交中…' : '提交'),
+        ),
+      ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _subjectController,
+            decoration: const InputDecoration(hintText: '主题'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _messageController,
+            maxLines: 6,
+            minLines: 4,
+            decoration: const InputDecoration(hintText: '详细描述你的问题'),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
             Text(
-              '新建工单',
-              style: AppTextStyle.title3.of(context, emphasized: true),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _subjectController,
-              decoration: const InputDecoration(hintText: '主题'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _messageController,
-              maxLines: 6,
-              minLines: 4,
-              decoration: const InputDecoration(hintText: '详细描述你的问题'),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _error!,
-                style: TextStyle(color: colorScheme.error, fontSize: 13),
-              ),
-            ],
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _submitting
-                      ? null
-                      : () => Navigator.of(context).pop(false),
-                  child: const Text('取消'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _submitting ? null : _submit,
-                  child: Text(_submitting ? '提交中…' : '提交'),
-                ),
-              ],
+              _error!,
+              style: TextStyle(color: colorScheme.error, fontSize: 13),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -408,7 +397,12 @@ class _V2BoardTicketDetailViewState extends State<V2BoardTicketDetailView> {
             child: messages.isEmpty
                 ? const Center(child: Text('暂无消息'))
                 : ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      context.contentTopPadding,
+                      16,
+                      16,
+                    ),
                     itemCount: messages.length,
                     itemBuilder: (_, index) =>
                         _MessageBubble(message: messages[index]),

@@ -257,7 +257,12 @@ class _V2BoardShopViewState extends State<V2BoardShopView> {
           : _error != null
           ? _ShopError(message: _error!, onRetry: _loadData)
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                context.contentTopPadding,
+                16,
+                32,
+              ),
               children: [
                 if (_userInfo != null) ...[
                   _SubscriptionBanner(

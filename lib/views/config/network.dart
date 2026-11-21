@@ -128,19 +128,6 @@ class SystemProxyItem extends ConsumerWidget {
   }
 }
 
-class Ipv6Item extends ConsumerWidget {
-  const Ipv6Item({super.key});
-
-  @override
-  Widget build(BuildContext context, ref) {
-    return _vpnToggle(
-      title: (l) => 'IPv6',
-      select: (state) => state.ipv6,
-      update: (state, value) => state.copyWith(ipv6: value),
-    );
-  }
-}
-
 class AutoSetSystemDnsItem extends ConsumerWidget {
   const AutoSetSystemDnsItem({super.key});
 
@@ -489,7 +476,6 @@ class VpnSections extends ConsumerWidget {
             VpnSystemProxyItem(),
             BypassDomainItem(),
             AllowBypassItem(),
-            Ipv6Item(),
             DNSHijackingItem(),
           ],
           footer: [

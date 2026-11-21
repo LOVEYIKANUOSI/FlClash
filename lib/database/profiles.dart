@@ -130,6 +130,24 @@ class ProfilesDao extends DatabaseAccessor<Database> with _$ProfilesDaoMixin {
     batch.insertAllOnConflictUpdate(profiles, items);
   }
 
+  /// 旧版本 profiles.url 是明文：启动时一次性重写成密文。
+  ///
+  /// 返回迁移条数。已经是密文的行不重复加密（避免每次启动都改库）；
+  /// 只迁移 `url` 非空的订阅配置，本地文件配置本来就空串。
+  Future<int> encryptLegacyProfileUrls() async {
+    final rows = await profiles.select().get();
+    final legacy = [
+      for (final row in rows)
+        if (row.url.isNotEmpty && !CredentialCipher.isEncryptedField(row.url))
+          row.toProfile(),
+    ];
+    if (legacy.isEmpty) {
+      return 0;
+    }
+    await setAll(legacy);
+    return legacy.length;
+  }
+
   Selectable<int> ids() {
     final query = profiles.selectOnly()..addColumns([profiles.id]);
     return query.map((row) => row.read(profiles.id)!);
@@ -167,7 +185,10 @@ extension RawProfilExt on RawProfile {
       type: type,
       label: label,
       currentGroupName: currentGroupName,
-      url: url,
+      // profiles.url 落盘加密：订阅链接带 token / TOTP 签名参数，明文存
+      // database.sqlite 等于把订阅凭证留在磁盘上。旧版本明文由 decryptField
+      // 原样兼容（见 CredentialCipher.decryptField）。
+      url: CredentialCipher.decryptField(url) ?? '',
       ageSecretKey: ageSecretKey ?? '',
       lastUpdateDate: lastUpdateDate,
       autoUpdateDuration: Duration(milliseconds: autoUpdateDurationMillis),
@@ -191,7 +212,7 @@ extension ProfilesCompanionExt on Profile {
       type: type,
       label: label,
       currentGroupName: Value(currentGroupName),
-      url: url,
+      url: CredentialCipher.encryptField(url),
       ageSecretKey: Value(ageSecretKey.isEmpty ? null : ageSecretKey),
       lastUpdateDate: Value(lastUpdateDate),
       autoUpdateDurationMillis: autoUpdateDuration.inMilliseconds,

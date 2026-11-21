@@ -92,7 +92,10 @@ Write-Output ($guid + '|' + $mac + '|' + $disk)
         diskSerial: parts.length > 2 ? _clean(parts[2]) : '-',
       );
     } catch (e) {
-      commonPrint.log('[Fingerprint] 采集异常: $e', logLevel: LogLevel.warning);
+      commonPrint.log(
+        '[Fingerprint] 采集异常: ${sanitizeV2BoardLog(e)}',
+        logLevel: LogLevel.warning,
+      );
       return const DeviceFingerprint(
         mac: '-',
         diskSerial: '-',
@@ -125,7 +128,10 @@ Write-Output ($guid + '|' + $mac + '|' + $disk)
         machineGuid: androidId,
       );
     } catch (e) {
-      commonPrint.log('[Fingerprint] Android 采集异常: $e', logLevel: LogLevel.warning);
+      commonPrint.log(
+        '[Fingerprint] Android 采集异常: ${sanitizeV2BoardLog(e)}',
+        logLevel: LogLevel.warning,
+      );
       return const DeviceFingerprint(
         mac: '-',
         diskSerial: '-',

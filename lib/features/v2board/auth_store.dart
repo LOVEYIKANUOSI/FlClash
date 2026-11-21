@@ -1,6 +1,19 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:fl_clash/common/credential_cipher.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_config.dart';
+
+/// 自动登录保存的账号密码（只在内存里短暂出现，落盘走系统加密存储）。
+class AutoLoginCredential {
+  const AutoLoginCredential({required this.email, required this.password});
+
+  final String email;
+  final String password;
+}
 
 /// V2Board 登录凭证 / 设备信息 / 域名池的持久化存储。
 ///
@@ -18,9 +31,50 @@ class AuthStore {
   static const _domainPoolKey = 'v2b_domain_pool';
   static const _heartbeatIntervalKey = 'v2b_heartbeat_interval';
 
+  /// 自动登录：开启时间戳（毫秒）与加密后的账号密码都存 shared_preferences，
+  /// 但密码字段是 AES-256-GCM 密文（密钥由本机环境指纹派生、不落盘），
+  /// 明文不会出现。加密实现见 [CredentialCipher]。
+  static const _autoLoginAtKey = 'v2b_auto_login_at';
+  static const _autoCredentialKey = 'v2b_auto_credential';
+
+  /// 自动登录有效期：365 天。过期后必须重新用账号密码登录。
+  static const autoLoginValidity = Duration(days: 365);
+
   SharedPreferences? _prefs;
 
   static String? _subscribeUrl;
+
+  /// 读取一个「落盘密文」字段。
+  ///
+  /// 旧版本存的是明文（没有 `enc:v1:` 前缀）：本次先按明文返回保证可用，
+  /// 同时异步把它重写成密文，下次启动就只剩密文了。
+  String? _readSecret(String key) {
+    final prefs = _prefs;
+    if (prefs == null) {
+      return null;
+    }
+    final raw = prefs.getString(key);
+    if (raw == null || raw.isEmpty) {
+      return raw;
+    }
+    if (!CredentialCipher.isEncryptedField(raw)) {
+      final encrypted = CredentialCipher.encryptField(raw);
+      if (encrypted != raw) {
+        unawaited(prefs.setString(key, encrypted));
+      }
+      return raw;
+    }
+    return CredentialCipher.decryptField(raw);
+  }
+
+  /// 写入一个「落盘密文」字段。
+  Future<void> _writeSecret(String key, String value) async {
+    final prefs = _prefs;
+    if (prefs == null) {
+      return;
+    }
+    await prefs.setString(key, CredentialCipher.encryptField(value));
+  }
 
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
@@ -30,15 +84,18 @@ class AuthStore {
   String get panelUrl => _prefs?.getString(_panelUrlKey) ?? AppConfig.defaultPanelUrl;
 
   String? get email => _prefs?.getString(_emailKey);
-  String? get authData => _prefs?.getString(_authDataKey);
-  String? get token => _prefs?.getString(_tokenKey);
+
+  /// 面板 JWT / 订阅 token / 设备 ID / TOTP 密钥都按「落盘密文」存放：
+  /// 拷走 shared_preferences.json 也拿不到可用凭证（见 [CredentialCipher]）。
+  String? get authData => _readSecret(_authDataKey);
+  String? get token => _readSecret(_tokenKey);
   String? get subscribeUrl => _subscribeUrl;
 
   /// 面板下发的设备 ID。
-  String? get deviceId => _prefs?.getString(_deviceIdKey);
+  String? get deviceId => _readSecret(_deviceIdKey);
 
   /// 设备专属 TOTP secret。
-  String? get totpSecret => _prefs?.getString(_totpSecretKey);
+  String? get totpSecret => _readSecret(_totpSecretKey);
 
   /// 面板下发的心跳间隔（秒）。
   int get heartbeatIntervalSeconds =>
@@ -70,6 +127,93 @@ class AuthStore {
           .where(AppConfig.isUsableDomain)
           .toList();
 
+  /// 是否已开启自动登录且仍在 1 年有效期内。
+  bool get autoLoginEnabled {
+    final at = _prefs?.getInt(_autoLoginAtKey);
+    if (at == null || at <= 0) {
+      return false;
+    }
+    final elapsed = DateTime.now().millisecondsSinceEpoch - at;
+    return elapsed >= 0 && elapsed < autoLoginValidity.inMilliseconds;
+  }
+
+  /// 自动登录到期时间；没开启或已过期返回 null。
+  DateTime? get autoLoginExpiresAt {
+    final at = _prefs?.getInt(_autoLoginAtKey);
+    if (at == null || at <= 0) {
+      return null;
+    }
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+      at + autoLoginValidity.inMilliseconds,
+    );
+    return expiresAt.isAfter(DateTime.now()) ? expiresAt : null;
+  }
+
+  /// 保存自动登录凭据：密码加密后落盘，只记录开启时间。
+  ///
+  /// 返回是否真的保存成功（加密失败返回 false，界面上要能看出来）。
+  Future<bool> saveAutoLogin({
+    required String email,
+    required String password,
+  }) async {
+    final prefs = _prefs;
+    if (prefs == null) {
+      return false;
+    }
+    final plain = jsonEncode({'email': email, 'password': password});
+    final encrypted = CredentialCipher.encrypt(plain);
+    if (encrypted == null || encrypted.isEmpty) {
+      debugPrint('[AutoLogin] 凭据加密失败，未保存');
+      return false;
+    }
+    await prefs.setString(_autoCredentialKey, encrypted);
+    await prefs.setInt(_autoLoginAtKey, DateTime.now().millisecondsSinceEpoch);
+    await prefs.setString(_emailKey, email);
+    return true;
+  }
+
+  /// 读取自动登录凭据；未开启、已过期或解密失败都返回 null。
+  Future<AutoLoginCredential?> readAutoLogin() async {
+    final prefs = _prefs;
+    if (prefs == null || !autoLoginEnabled) {
+      return null;
+    }
+    final encrypted = prefs.getString(_autoCredentialKey);
+    if (encrypted == null || encrypted.isEmpty) {
+      return null;
+    }
+    final plain = CredentialCipher.decrypt(encrypted);
+    if (plain == null || plain.isEmpty) {
+      debugPrint('[AutoLogin] 凭据解密失败（换了机器/用户或数据损坏）');
+      return null;
+    }
+    try {
+      final map = jsonDecode(plain);
+      if (map is! Map) {
+        return null;
+      }
+      final email = (map['email'] ?? '').toString();
+      final password = (map['password'] ?? '').toString();
+      if (email.isEmpty || password.isEmpty) {
+        return null;
+      }
+      return AutoLoginCredential(email: email, password: password);
+    } catch (e) {
+      debugPrint('[AutoLogin] 凭据解析失败: $e');
+      return null;
+    }
+  }
+
+  /// 关闭自动登录并删除已保存的密码。
+  Future<void> clearAutoLogin() async {
+    final prefs = _prefs;
+    if (prefs == null) {
+      return;
+    }
+    await prefs.remove(_autoCredentialKey);
+    await prefs.remove(_autoLoginAtKey);
+  }
+
   bool get hasSession {
     final auth = authData;
     return auth != null && auth.isNotEmpty;
@@ -88,8 +232,8 @@ class AuthStore {
     }
     await prefs.setString(_panelUrlKey, AppConfig.normalizeUrl(panelUrl));
     await prefs.setString(_emailKey, email);
-    await prefs.setString(_authDataKey, authData);
-    await prefs.setString(_tokenKey, token);
+    await _writeSecret(_authDataKey, authData);
+    await _writeSecret(_tokenKey, token);
     _subscribeUrl = subscribeUrl;
   }
 
@@ -106,8 +250,8 @@ class AuthStore {
     if (prefs == null) {
       return;
     }
-    await prefs.setString(_deviceIdKey, deviceId);
-    await prefs.setString(_totpSecretKey, totpSecret);
+    await _writeSecret(_deviceIdKey, deviceId);
+    await _writeSecret(_totpSecretKey, totpSecret);
     if (heartbeatIntervalSeconds != null && heartbeatIntervalSeconds > 0) {
       await prefs.setInt(_heartbeatIntervalKey, heartbeatIntervalSeconds);
     }

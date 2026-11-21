@@ -1,10 +1,11 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
+import 'package:fl_clash/features/v2board/v2board_state.dart';
 import 'package:fl_clash/models/common.dart';
 import 'package:fl_clash/providers/providers.dart';
+import 'package:fl_clash/ui/icons/icons.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +32,7 @@ class ProxiesTabViewState extends ConsumerState<ProxiesTabView>
   @override
   void initState() {
     super.initState();
+    v2BoardState.addListener(_handleV2BoardChanged);
     ref.listenManual(proxiesTabControllerStateProvider, (prev, next) {
       if (prev == next) {
         return;
@@ -46,11 +48,19 @@ class ProxiesTabViewState extends ConsumerState<ProxiesTabView>
 
   @override
   void dispose() {
+    v2BoardState.removeListener(_handleV2BoardChanged);
     _destroyTabController();
     for (final controller in _scrollControllers.values) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  /// 节点池刷新（申请/释放/进入页面）后要重新合并「未申请节点」。
+  void _handleV2BoardChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   ScrollController _scrollControllerOf(String groupName) {
@@ -193,7 +203,20 @@ class ProxiesTabViewState extends ConsumerState<ProxiesTabView>
                       top: context.contentTopPadding - context.appBarInset,
                       bottom: 16,
                     ),
-                    child: GroupTabs(controller: controller, groups: groups),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GroupTabs(
+                            controller: controller,
+                            groups: groups,
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsetsDirectional.only(end: 16),
+                          child: _RefreshSubscriptionButton(),
+                        ),
+                      ],
+                    ),
                   ),
                   Expanded(
                     child: WidthBuilder(
@@ -282,6 +305,62 @@ class ProxyGroupView extends ConsumerWidget {
             groupName: group.name,
           );
         },
+      ),
+    );
+  }
+}
+
+/// 代理页顶部的「更新订阅」按钮：Dawn 专属订阅的 TOTP 签名只有 2 分钟有效，
+/// 点这里重新签发 URL 并重新导入 profile。
+class _RefreshSubscriptionButton extends StatefulWidget {
+  const _RefreshSubscriptionButton();
+
+  @override
+  State<_RefreshSubscriptionButton> createState() =>
+      _RefreshSubscriptionButtonState();
+}
+
+class _RefreshSubscriptionButtonState
+    extends State<_RefreshSubscriptionButton> {
+  bool _busy = false;
+
+  Future<void> _refresh() async {
+    if (_busy || !v2BoardState.hasSession) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await v2BoardState.refreshSubscribe();
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = context.colorScheme;
+    return Card(
+      shape: AppShape.full,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      onPressed: _busy ? null : _refresh,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GlyphIcon(
+            AppGlyphs.sync,
+            size: 16,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _busy ? '更新中…' : '更新订阅',
+            style: AppTextStyle.subheadline
+                .of(context, emphasized: true)
+                .copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+        ],
       ),
     );
   }
