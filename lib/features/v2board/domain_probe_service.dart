@@ -28,6 +28,9 @@ class DomainProbeResult {
 
 class DomainSwitchOutcome {
   final List<DomainProbeResult> all;
+
+  /// 健康（连通且源站未 5xx）的域名列表。H-07：语义是 `healthy`，
+  /// 不是单纯的 TCP 连通。
   final List<DomainProbeResult> reachable;
   final String? newActive;
   final String? error;
@@ -125,23 +128,25 @@ class DomainProbeService {
       );
     }
     final results = await Future.wait(probeTargets.map(probe));
-    final reachable = results.where((r) => r.reachable).toList();
+    // H-07：只把「连通且源站正常」（status < 500）当可用，不能把
+    // Cloudflare 502/504 这类「连得上但源站挂了」的域名选去上报/切换。
+    final healthy = results.where((r) => r.healthy).toList();
 
-    // active 域名可达 → 无需切换
-    if (reachable.any((r) => r.domain == active)) {
+    // active 域名健康 → 无需切换
+    if (healthy.any((r) => r.domain == active)) {
       _consecutiveFailures = 0;
-      return _finish(DomainSwitchOutcome(all: results, reachable: reachable));
+      return _finish(DomainSwitchOutcome(all: results, reachable: healthy));
     }
 
     _consecutiveFailures++;
 
-    // active 不可达，但池内有可用域名 → 用可用域名上报切换
-    if (reachable.isNotEmpty &&
+    // active 不健康，但池内有健康域名 → 用它上报（面板只落库，是否切池由面板决定）
+    if (healthy.isNotEmpty &&
         authData != null &&
         authData.isNotEmpty &&
         deviceId != null &&
         deviceId.isNotEmpty) {
-      final reporter = reachable.first.domain;
+      final reporter = healthy.first.domain;
       try {
         final result = await v2BoardClient.reportDomain(
           AppConfig.normalizeDomain(reporter),
@@ -160,7 +165,7 @@ class DomainProbeService {
           return _finish(
             DomainSwitchOutcome(
               all: results,
-              reachable: reachable,
+              reachable: healthy,
               newActive: newActive,
             ),
           );
@@ -169,19 +174,19 @@ class DomainProbeService {
         return _finish(
           DomainSwitchOutcome(
             all: results,
-            reachable: reachable,
+            reachable: healthy,
             error: e.toString(),
           ),
         );
       }
     }
 
-    // 全部不可达或未登录 → 等下一轮（定时器天然指数退避）
+    // 全部不可达或未登录 → 等下一轮（固定 1 分钟周期，不做指数退避）
     return _finish(
       DomainSwitchOutcome(
         all: results,
-        reachable: reachable,
-        error: reachable.isEmpty ? '全部域名不可达' : '未登录，无法上报切换',
+        reachable: healthy,
+        error: healthy.isEmpty ? '全部域名不可达' : '未登录，无法上报切换',
       ),
     );
   }

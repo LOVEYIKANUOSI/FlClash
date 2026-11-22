@@ -47,7 +47,7 @@ void main() {
 
   test('主域名不可达时自动换面板下发的备用域名', () async {
     SharedPreferences.setMockInitialValues({
-      'v2b_panel_url': 'https://gettakeoff.cc',
+      'v2b_panel_url': 'https://panel.dawnpanel.net',
       'v2b_active_domain': 'api.primary-dawn.com',
       'v2b_domain_pool': <String>[
         'api.primary-dawn.com',
@@ -70,7 +70,7 @@ void main() {
 
   test('所有通道都不可达时抛 isNetwork 异常（不当作账号错误）', () async {
     SharedPreferences.setMockInitialValues({
-      'v2b_panel_url': 'https://gettakeoff.cc',
+      'v2b_panel_url': 'https://panel.dawnpanel.net',
       'v2b_active_domain': 'api.primary-dawn.com',
       'v2b_domain_pool': <String>['backup1.dawncdn.com'],
     });
@@ -91,5 +91,33 @@ void main() {
     );
     // 三个候选（active / 备用 / 面板地址）都试过。
     expect(adapter.calls.length, greaterThanOrEqualTo(2));
+  });
+
+  test('第一个备用也失败时继续试下一个备用（H-11）', () async {
+    SharedPreferences.setMockInitialValues({
+      'v2b_panel_url': 'https://panel.dawnpanel.net',
+      'v2b_active_domain': 'api.primary-dawn.com',
+      'v2b_domain_pool': <String>[
+        'api.primary-dawn.com',
+        'backup1.dawncdn.com',
+        'backup2.dawncdn.com',
+      ],
+    });
+    // 只有第三个候选可用：拦截器必须逐个换通道，不能只换一次。
+    final adapter = _FakeAdapter({'backup2.dawncdn.com'});
+    v2BoardClient.debugSetHttpClientAdapter(adapter);
+
+    final result = await v2BoardClient.login(
+      baseUrl: 'https://api.primary-dawn.com',
+      email: 'a@b.com',
+      password: 'password123',
+    );
+
+    expect(result.authData, 'jwt-from-backup');
+    expect(adapter.calls, [
+      'api.primary-dawn.com',
+      'backup1.dawncdn.com',
+      'backup2.dawncdn.com',
+    ]);
   });
 }

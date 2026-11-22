@@ -24,6 +24,11 @@ class SecurityReportService {
 
   int _beatCounter = 0;
 
+  /// H-12：设备注册被面板明确拒绝（403：被禁用/超限/网卡码不符）。
+  bool _deviceRestricted = false;
+
+  bool get deviceRestricted => _deviceRestricted;
+
   /// 带环境画像注册设备，返回面板下发的设备数据
   /// （device_id / totp_secret / heartbeat_interval / active / domain_pool）。
   /// 失败返回 null。
@@ -101,7 +106,24 @@ class SecurityReportService {
         '[Security] 注册成功: deviceId=${maskSecret(deviceId ?? '')} '
         '签名密钥=${hasSecret ? '已下发' : '缺失(会退回普通订阅)'}',
       );
+      _deviceRestricted = false;
       return device;
+    } on V2BoardException catch (e) {
+      // H-12：注册被面板明确拒绝（403 = 设备禁用/数量超限/网卡码冲突）。
+      // 与网络失败区分开，供状态层提示用户，而不是当作「网络不好」静默重试。
+      if (e.statusCode == 403) {
+        _deviceRestricted = true;
+        commonPrint.log(
+          '[Security] 设备被面板限制: ${sanitizeV2BoardLog(e.message)}',
+          logLevel: LogLevel.warning,
+        );
+      } else {
+        commonPrint.log(
+          '[Security] 注册异常: ${sanitizeV2BoardLog(e)}',
+          logLevel: LogLevel.warning,
+        );
+      }
+      return null;
     } catch (e) {
       commonPrint.log(
         '[Security] 注册异常: ${sanitizeV2BoardLog(e)}',

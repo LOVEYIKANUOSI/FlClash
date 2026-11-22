@@ -403,10 +403,23 @@ class ProfilesAction extends _$ProfilesAction {
     );
   }
 
-  Future<Profile> _download(Profile profile) {
+  Future<Profile> _download(Profile profile) async {
+    final isDawn = profile.label == dawnProfileLabel;
+    // 专属订阅的长期 token 不再放在 URL 里（S-35）：从 AuthStore 取出登录
+    // token，改走 X-Subscribe-Token 请求头；URL 只剩 2 分钟时效签名。
+    Map<String, String>? headers;
+    if (isDawn) {
+      final store = AuthStore();
+      await store.init();
+      final token = store.token;
+      if (token != null && token.isNotEmpty) {
+        headers = {AppConfig.subscribeTokenHeader: token};
+      }
+    }
     return profile.update(
       validate: (path, key) => _core.validateProfile(path, key),
-      transform: profile.label == dawnProfileLabel
+      headers: headers,
+      transform: isDawn
           ? (data) async {
               // 专属订阅（enc=1）下发的正文是 AES-256-GCM 密文 JSON，
               // 必须用本机 device_id 解出 YAML 再交给核心校验。

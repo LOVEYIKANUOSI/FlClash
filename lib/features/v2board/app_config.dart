@@ -4,8 +4,18 @@
 class AppConfig {
   AppConfig._();
 
-  /// 默认面板地址（生产公网入口，必须带 https scheme）。
-  static const defaultPanelUrl = 'https://n415fgd.952769.xyz';
+  /// 默认面板地址：**源码里不写真实生产入口**（S-34）。
+  ///
+  /// 发行构建用 `--dart-define=PANEL_DEFAULT_URL=https://你的面板域名` 注入；
+  /// 未注入时为空字符串，登录页让用户自己填面板地址。
+  /// 这样克隆仓库或对构建产物做字符串提取都拿不到生产入口。
+  static const defaultPanelUrl = String.fromEnvironment('PANEL_DEFAULT_URL');
+
+  /// 订阅 token 的请求头名（面板 `Client` 中间件优先读它，兼容 `?token=`）。
+  ///
+  /// 专属订阅把长期 token 放请求头、URL 只保留 2 分钟时效签名，
+  /// 避免 token 出现在 CDN/反代/客户端本地访问日志与 Referer 里（S-35）。
+  static const subscribeTokenHeader = 'X-Subscribe-Token';
 
   /// 面板 API 端点（与管理端 ClientController / UserDeviceController 对齐）。
   static const loginPath = '/api/v1/passport/auth/login';

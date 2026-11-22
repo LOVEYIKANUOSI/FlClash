@@ -186,8 +186,13 @@ extension ProfileExtension on Profile {
   Future<Profile> update({
     required ValidateConfig validate,
     Future<Uint8List> Function(Uint8List data)? transform,
+    Map<String, String>? headers,
   }) async {
-    final response = await request.getFileResponseForUrl(url);
+    final response = await request.getFileResponseForUrl(
+      url,
+      // 专属订阅把 token 放请求头而不是 URL（S-35）。
+      headers: headers,
+    );
     final disposition = response.headers.value('content-disposition');
     final userinfo = response.headers.value('subscription-userinfo');
     var data = response.data ?? Uint8List(0);

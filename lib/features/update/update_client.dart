@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/features/v2board/app_config.dart';
 
@@ -12,6 +15,16 @@ class UpdateCheckUnauthorized implements Exception {
   String toString() => '登录状态已失效';
 }
 
+/// 当前平台不走面板更新通道（面板没有该平台的清单）。
+class UpdateChannelUnsupported implements Exception {
+  const UpdateChannelUnsupported(this.platform);
+
+  final String? platform;
+
+  @override
+  String toString() => '面板不支持当前平台（${platform ?? 'unknown'}）的更新清单';
+}
+
 /// 拉取更新清单：面板优先，GitHub 仅兜底。
 ///
 /// 面板接口需要登录态（`Authorization: authData`），返回 `data: null` 表示
@@ -21,6 +34,8 @@ class UpdateClient {
 
   static final UpdateClient instance = UpdateClient._();
 
+  /// 面板清单请求也必须拒绝坏证书（S-37）：清单里的 download_url 会被安装，
+  /// 不能受「校验 TLS 证书」用户开关影响。
   final Dio _panelDio = Dio(
     BaseOptions(
       headers: {'User-Agent': browserUa, 'Accept': 'application/json'},
@@ -29,18 +44,28 @@ class UpdateClient {
       receiveTimeout: const Duration(seconds: 20),
       validateStatus: (status) => status != null,
     ),
-  );
+  )..httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () =>
+          HttpClient()..badCertificateCallback = ((_, _, _) => false),
+    );
 
   /// 查询面板 `/api/v1/user/client/update`。
+  ///
+  /// 平台标识按运行平台上报（S-36）；当前平台没有面板通道时抛
+  /// [UpdateChannelUnsupported]，调用方直接走 GitHub 兜底。
   Future<UpdateManifest?> fetchFromPanel({
     required String baseUrl,
     required String authData,
     required int currentCode,
   }) async {
+    final platform = currentUpdatePlatformId;
+    if (platform == null) {
+      throw UpdateChannelUnsupported(platform);
+    }
     final response = await _panelDio.get<dynamic>(
       '${AppConfig.normalizeUrl(baseUrl)}/api/v1/user/client/update',
       queryParameters: {
-        'platform': updatePlatformId,
+        'platform': platform,
         'channel': updateChannel,
         'code': currentCode,
       },

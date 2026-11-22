@@ -88,6 +88,18 @@ class HeartbeatService {
       if (interval != null && interval > 0) {
         updateInterval(Duration(seconds: interval));
       }
+      // H-08：面板可能在心跳响应里下发接入域名/域名池（旧版面板只给间隔）。
+      // 有下发就立即落盘，让后续面板请求优先走最新域名；没下发保持原配置。
+      if (result.ok &&
+          ((result.active?.isNotEmpty ?? false) ||
+              result.domainPool.isNotEmpty)) {
+        await authStore.saveDomains(
+          activeDomain: result.active ?? authStore.activeDomain,
+          domainPool: result.domainPool.isNotEmpty
+              ? result.domainPool
+              : authStore.domainPool,
+        );
+      }
       onResult?.call(result);
       if (result.ok) {
         await SecurityReportService.instance.onHeartbeat();

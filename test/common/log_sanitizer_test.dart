@@ -5,7 +5,7 @@ void main() {
   group('sanitizeV2BoardLog', () {
     test('订阅 URL 的 token / code / sign / expires / device_id 全部打码', () {
       const text =
-          'DioException [unknown]: https://gettakeoff.cc/api/v1/client/subscribe'
+          'DioException [unknown]: https://panel.dawnpanel.net/api/v1/client/subscribe'
           '?token=deadbeefcafebabe&flag=meta&app=flclash&device_id=abc123'
           '&code=123456&expires=1763000000&sign=ffffffffffff';
       final sanitized = sanitizeV2BoardLog(text);
@@ -20,9 +20,9 @@ void main() {
 
     test('保留域名与失败原因，便于排查', () {
       const text = 'DioException [connection error]: '
-          'https://gettakeoff.cc/api/v1/client/subscribe?token=xxx';
+          'https://panel.dawnpanel.net/api/v1/client/subscribe?token=xxx';
       final sanitized = sanitizeV2BoardLog(text);
-      expect(sanitized, contains('gettakeoff.cc'));
+      expect(sanitized, contains('panel.dawnpanel.net'));
       expect(sanitized, contains('connection error'));
     });
 

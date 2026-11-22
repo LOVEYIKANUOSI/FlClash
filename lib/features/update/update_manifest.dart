@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:fl_clash/common/common.dart';
 
 /// 更新清单的来源。
@@ -6,8 +8,28 @@ import 'package:fl_clash/common/common.dart';
 /// GitHub Releases 只在面板不可达时兜底，只有版本号和安装包，没有签名。
 enum UpdateSource { panel, github }
 
-/// 当前客户端平台标识，与服务端 `v2_client_update.platform` 对齐。
-const updatePlatformId = 'windows-x64';
+/// 当前平台 + 架构的更新标识，与服务端 `v2_client_update.platform` 对齐。
+///
+/// S-36：原来写死 `windows-x64`，Android / 其它平台向面板请求只会拿到
+/// `data: null`（白名单空档）。这里按运行平台上报；返回 null 表示该平台
+/// 不走面板通道（直接跳过，交给 GitHub 兜底），避免拿 Windows 清单。
+///
+/// 注意：Windows 目前只发 x64 安装版，ARM64 Windows 上运行同一个构建也用它。
+String? get currentUpdatePlatformId {
+  if (Platform.isWindows) {
+    return 'windows-x64';
+  }
+  if (Platform.isAndroid) {
+    return 'android-arm64';
+  }
+  if (Platform.isMacOS) {
+    return 'macos-arm64';
+  }
+  if (Platform.isLinux) {
+    return 'linux-x64';
+  }
+  return null;
+}
 
 /// 更新通道，服务端按 (platform, channel) 取最新已发布记录。
 const updateChannel = 'stable';
@@ -99,11 +121,18 @@ class UpdateManifest {
 
   bool get hasSignature => signature.isNotEmpty;
 
+  /// 这份清单必须带 RSA 签名才允许安装（S-36）。
+  ///
+  /// 面板清单是权威来源，必须验签；GitHub 兜底没有签名能力（只有同源的
+  /// SHA256SUMS），只能靠 sha256 + HTTPS —— 这是产品上保留兜底的代价，
+  /// 所以面板清单绝不能退化成「有签名才验、没签名就跳过」。
+  bool get requiresSignature => source == UpdateSource.panel;
+
   /// 签名原文：`dawn-update-v1\n{windows-x64}\n{version_code}\n{file_size}\n{sha256}`。
   String get signaturePayload {
     return [
       updateSignaturePrefix,
-      updatePlatformId,
+      currentUpdatePlatformId ?? '',
       '$versionCode',
       '$fileSize',
       sha256,

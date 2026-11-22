@@ -44,9 +44,12 @@ void main() {
     await server.close(force: true);
   });
 
-  UpdateManifest manifest({String? sha}) {
+  UpdateManifest manifest({
+    String? sha,
+    UpdateSource source = UpdateSource.github,
+  }) {
     return UpdateManifest(
-      source: UpdateSource.panel,
+      source: source,
       versionName: '0.9.4',
       versionCode: 2026111901,
       minVersionCode: 0,
@@ -97,6 +100,21 @@ void main() {
     );
     expect(service.state.phase, UpdatePhase.failed);
     expect(service.state.error, contains('sha256'));
+    final file = File(
+      '${dir.path}${Platform.pathSeparator}Dawn-0.9.4-setup.exe',
+    );
+    expect(await file.exists(), isFalse);
+  });
+
+  test('rejects a panel manifest without signature (S-36)', () async {
+    final dir = await tempDir();
+    final service = UpdateService.instance;
+    await service.download(
+      manifest(source: UpdateSource.panel),
+      directory: dir.path,
+    );
+    expect(service.state.phase, UpdatePhase.failed);
+    expect(service.state.error, contains('签名'));
     final file = File(
       '${dir.path}${Platform.pathSeparator}Dawn-0.9.4-setup.exe',
     );

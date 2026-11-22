@@ -15,8 +15,8 @@ void main() {
   group('PanelEndpoint 候选域名', () {
     test('顺序是 active → 域名池 → 面板地址，占位符被过滤', () async {
       SharedPreferences.setMockInitialValues({
-        'v2b_panel_url': 'https://gettakeoff.cc',
-        'v2b_active_domain': 'api.1230654.xyz',
+        'v2b_panel_url': 'https://panel.dawnpanel.net',
+        'v2b_active_domain': 'api.dawnpanel.net',
         'v2b_domain_pool': <String>[
           'backup1.dawncdn.com',
           'client.example.invalid',
@@ -28,42 +28,42 @@ void main() {
       expect(
         candidates,
         [
-          'https://api.1230654.xyz',
+          'https://api.dawnpanel.net',
           'https://backup1.dawncdn.com',
-          'https://gettakeoff.cc',
+          'https://panel.dawnpanel.net',
         ],
       );
     });
 
     test('没有 active 域名时回退到面板地址', () async {
       SharedPreferences.setMockInitialValues({
-        'v2b_panel_url': 'https://gettakeoff.cc',
+        'v2b_panel_url': 'https://panel.dawnpanel.net',
       });
 
       final candidates = await PanelEndpoint.instance.candidates();
 
-      expect(candidates, ['https://gettakeoff.cc']);
+      expect(candidates, ['https://panel.dawnpanel.net']);
     });
   });
 
   group('PanelEndpoint 换通道顺序', () {
     test('直连先换备用域名，再换代理（无代理时用完即止）', () async {
       SharedPreferences.setMockInitialValues({
-        'v2b_panel_url': 'https://gettakeoff.cc',
-        'v2b_active_domain': 'api.1230654.xyz',
+        'v2b_panel_url': 'https://panel.dawnpanel.net',
+        'v2b_active_domain': 'api.dawnpanel.net',
         'v2b_domain_pool': <String>['backup1.dawncdn.com'],
       });
-      final failed = Uri.parse('https://api.1230654.xyz/api/v1/user/heartbeat');
+      final failed = Uri.parse('https://api.dawnpanel.net/api/v1/user/heartbeat');
 
       final first = await PanelEndpoint.instance.nextAttempt(failed, const []);
       expect(first, isNotNull);
       expect(first!.useProxy, isFalse);
-      expect(first.baseUrl, 'https://api.1230654.xyz');
-      expect(first.id, 'direct:https://api.1230654.xyz');
+      expect(first.baseUrl, 'https://api.dawnpanel.net');
+      expect(first.id, 'direct:https://api.dawnpanel.net');
 
       final second = await PanelEndpoint.instance.nextAttempt(
         failed,
-        ['direct:https://api.1230654.xyz'],
+        ['direct:https://api.dawnpanel.net'],
       );
       expect(second, isNotNull);
       expect(second!.useProxy, isFalse);
@@ -72,9 +72,9 @@ void main() {
       final third = await PanelEndpoint.instance.nextAttempt(
         failed,
         [
-          'direct:https://api.1230654.xyz',
+          'direct:https://api.dawnpanel.net',
           'direct:https://backup1.dawncdn.com',
-          'direct:https://gettakeoff.cc',
+          'direct:https://panel.dawnpanel.net',
         ],
       );
       // 测试环境没有内核 mixed-port，代理通道不存在 → 没有更多尝试。

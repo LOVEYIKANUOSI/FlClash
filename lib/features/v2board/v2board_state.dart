@@ -317,6 +317,10 @@ class V2BoardState extends ChangeNotifier {
     // 所以先确认它的 host 可用；不可用就保留 path/query（随机 path + token），
     // 换成刚验证过可用的 API 域名——签名只认 path，不认 host。
     final usableSubscribeUrl = await _ensureSubscribeHost(subscribeUrl);
+    // 长期 token 从 URL 移到 X-Subscribe-Token 请求头（S-35）：
+    // URL 只保留 2 分钟时效签名，避免 token 进入 CDN/反代/本地日志与 Referer。
+    // 下载侧由 ProfilesAction._download 对 Dawn profile 统一补这个头。
+    final tokenlessUrl = _stripSubscribeToken(usableSubscribeUrl);
     final deviceId = _store.deviceId;
     final totpSecret = _store.totpSecret;
     if (deviceId != null &&
@@ -324,7 +328,7 @@ class V2BoardState extends ChangeNotifier {
         totpSecret != null &&
         totpSecret.isNotEmpty) {
       final signedUrl = v2BoardClient.buildSignedSubscribeUrl(
-        subscribeUrl: usableSubscribeUrl,
+        subscribeUrl: tokenlessUrl,
         deviceId: deviceId,
         totpSecret: totpSecret,
       );
@@ -332,7 +336,20 @@ class V2BoardState extends ChangeNotifier {
       // （只有通过设备校验的 app=flclash 才加密；老服务端会忽略该参数）。
       return signedUrl.contains('enc=') ? signedUrl : '$signedUrl&enc=1';
     }
-    return v2BoardClient.buildPlainSubscribeUrl(usableSubscribeUrl);
+    return v2BoardClient.buildPlainSubscribeUrl(tokenlessUrl);
+  }
+
+  /// 去掉订阅 URL 里的长期 `token` 参数（改走请求头）。
+  ///
+  /// 面板 `Client` 中间件优先读 `X-Subscribe-Token`，同时兼容 `?token=`
+  /// （浏览器直接打开订阅链接的产品形态依赖它），所以移除后不会 403。
+  String _stripSubscribeToken(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.queryParameters.containsKey('token')) {
+      return url;
+    }
+    final query = Map<String, String>.from(uri.queryParameters)..remove('token');
+    return uri.replace(queryParameters: query).toString();
   }
 
   /// 确认面板下发的订阅 host 真的能用（占位符 / Cloudflare 5xx 都不算）。
@@ -503,9 +520,26 @@ class V2BoardState extends ChangeNotifier {
     _lastHeartbeatAt = DateTime.now();
     _lastHeartbeatOk = result.ok;
     notifyListeners();
-    if (result.isUnauthorized) {
+    if (result.isDeviceRevoked) {
+      // H-09：心跳 403 是 JWT 已通过、但面板拒绝这台设备（被吊销/解绑/超限）。
+      // 静默重登修不好这种情况，不能和 JWT 过期混在一起反复重登。
+      _handleDeviceRevoked(result.message);
+      return;
+    }
+    if (result.isAuthExpired) {
       unawaited(_recoverSession());
     }
+  }
+
+  /// 设备被面板吊销/停用：停止心跳与自动重登，提示用户处理。
+  void _handleDeviceRevoked(String? message) {
+    HeartbeatService.instance.stop();
+    _lastError = (message == null || message.isEmpty)
+        ? '设备已被面板限制，请重新登录或联系客服'
+        : message;
+    _notice = '设备已被限制，请重新登录或联系客服';
+    commonPrint.log('[V2Board] 设备被面板拒绝: ${_lastError ?? ''}');
+    notifyListeners();
   }
 
   /// 心跳 401/403：面板 JWT 默认只活 2 小时（`v2board.jwt_ttl=7200`，不续期），

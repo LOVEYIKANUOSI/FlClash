@@ -292,36 +292,49 @@ class PanelFailoverInterceptor extends Interceptor {
     if (!tried.contains(currentId)) {
       tried.add(currentId);
     }
-    final attempt = await PanelEndpoint.instance.nextAttempt(options.uri, tried);
-    if (attempt == null) {
-      return null;
-    }
-    final dio = attempt.useProxy ? proxyDio() : directDio();
-    if (dio == null) {
-      return null;
-    }
-    final base = Uri.tryParse(attempt.baseUrl);
-    if (base == null) {
-      return null;
-    }
-    // 只换 origin，path/query 原样保留（接口语义不变）。
-    final target = options.uri.replace(
-      scheme: base.scheme,
-      host: base.host,
-      port: base.hasPort ? base.port : null,
-    );
-    final next = options.copyWith(
-      path: target.toString(),
-      extra: {
-        ...options.extra,
-        _triedKey: tried,
-        _channelKey: attempt.useProxy ? 'proxy' : 'direct',
-      },
-    );
-    try {
-      return await dio.fetch<dynamic>(next);
-    } catch (_) {
-      return null;
+    // H-11：逐个通道尝试，直到成功或候选通道穷尽。
+    // 原实现只换一次通道，第二个备用也失败时就直接放弃。
+    var lastUri = options.uri;
+    while (true) {
+      final attempt = await PanelEndpoint.instance.nextAttempt(lastUri, tried);
+      if (attempt == null) {
+        return null;
+      }
+      final dio = attempt.useProxy ? proxyDio() : directDio();
+      final base = Uri.tryParse(attempt.baseUrl);
+      if (dio == null || base == null || base.host.isEmpty) {
+        tried.add(attempt.id);
+        continue;
+      }
+      // 只换 origin，path/query 原样保留（接口语义不变）。
+      final target = lastUri.replace(
+        scheme: base.scheme,
+        host: base.host,
+        port: base.hasPort ? base.port : null,
+      );
+      final next = options.copyWith(
+        path: target.toString(),
+        extra: {
+          ...options.extra,
+          _triedKey: tried,
+          _channelKey: attempt.useProxy ? 'proxy' : 'direct',
+        },
+      );
+      try {
+        final response = await dio.fetch<dynamic>(next);
+        final status = response.statusCode ?? 0;
+        if (status >= 500) {
+          // 5xx 也继续换通道（源站故障换域名/走代理可能能通）。
+          tried.add(attempt.id);
+          lastUri = target;
+          continue;
+        }
+        return response;
+      } catch (_) {
+        tried.add(attempt.id);
+        lastUri = target;
+        continue;
+      }
     }
   }
 }

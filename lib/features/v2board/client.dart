@@ -1,12 +1,32 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:flutter/foundation.dart';
 
 import 'app_config.dart';
 import 'panel_endpoint.dart';
 import 'totp.dart';
+
+/// 面板 403 文案分类（H-09）。
+///
+/// 面板 `User` 中间件对无效/过期 JWT 返回 403 + 「未登录或登陆已过期」，
+/// 而设备吊销返回 403 + `device not found or revoked` / 「设备已被限制」。
+/// 两者状态码相同，只能靠文案区分：JWT 过期应静默重登，设备问题应提示用户。
+bool _isDeviceRejectionMessage(String? message) {
+  if (message == null || message.isEmpty) {
+    return false;
+  }
+  final text = message.toLowerCase();
+  return text.contains('device') ||
+      text.contains('revoked') ||
+      text.contains('设备') ||
+      text.contains('禁用') ||
+      text.contains('限制') ||
+      text.contains('上限');
+}
 
 /// V2Board 接口调用失败时抛出，message 直接展示给用户。
 class V2BoardException implements Exception {
@@ -25,8 +45,16 @@ class V2BoardException implements Exception {
     this.isNetwork = false,
   });
 
-  /// 认证失效（需要重新登录）。
-  bool get isUnauthorized => statusCode == 401 || statusCode == 403;
+  /// JWT 失效：面板 `User`/`Staff` 中间件对无效/过期 token 一律返回
+  /// **403 + 「未登录或登陆已过期」**（不是 401），所以必须结合 message 判断（H-09）。
+  bool get isAuthExpired =>
+      statusCode == 401 ||
+      (statusCode == 403 && !_isDeviceRejectionMessage(message));
+
+  /// 设备被吊销/未知：心跳接口在 JWT 通过后仍 403，message 为
+  /// `device not found or revoked`（`UserDeviceController::heartbeat`）。
+  bool get isDeviceRevoked =>
+      statusCode == 403 && _isDeviceRejectionMessage(message);
 
   @override
   String toString() => message;
@@ -44,13 +72,35 @@ class V2BoardHeartbeatResult {
   final int? intervalSeconds;
   final int? statusCode;
 
+  /// H-08：面板可以在心跳响应里下发当前接入域名与域名池（与注册接口一致）。
+  /// 字段为空表示面板没下发（旧版面板），调用方保持现有域名配置。
+  final String? active;
+  final List<String> domainPool;
+
+  /// 面板返回的 `message`（403 时用来判断是「设备被吊销」还是别的业务错误）。
+  final String? message;
+
   const V2BoardHeartbeatResult({
     required this.ok,
     this.intervalSeconds,
     this.statusCode,
+    this.active,
+    this.domainPool = const <String>[],
+    this.message,
   });
 
-  bool get isUnauthorized => statusCode == 401 || statusCode == 403;
+  /// JWT 失效（面板 `user` 中间件对过期 token 返回 403 + 「未登录或登陆已过期」）。
+  /// 面板 JWT 默认只活 2 小时，这是常态过期，应静默重登（H-09）。
+  bool get isAuthExpired =>
+      statusCode == 401 ||
+      (statusCode == 403 && !_isDeviceRejectionMessage(message));
+
+  /// 设备被吊销/未知（面板心跳在 JWT 通过后仍 403 + `device not found or revoked`）。
+  bool get isDeviceRevoked =>
+      statusCode == 403 && _isDeviceRejectionMessage(message);
+
+  /// 需要重新登录（兼容旧调用方）。
+  bool get isUnauthorized => isAuthExpired;
 }
 
 class V2BoardDomainReportResult {
@@ -93,7 +143,12 @@ class V2BoardClient {
       // 面板的业务错误用非 200 表达，统一交给 _requireDataMap 解析 message。
       validateStatus: (status) => status != null,
     ),
-  );
+  )..httpClientAdapter = IOHttpClientAdapter(
+      // S-37：面板请求（登录/心跳/订阅/商城/工单）必须校验证书，
+      // 不受设置里「校验 TLS 证书」用户开关的影响。
+      createHttpClient: () =>
+          HttpClient()..badCertificateCallback = ((_, _, _) => false),
+    );
 
   String _buildUrl(String baseUrl, String path) {
     return '${AppConfig.normalizeUrl(baseUrl)}$path';
@@ -150,6 +205,14 @@ class V2BoardClient {
       );
       final data = _requireDataMap(response, fallbackMessage: '检查登录状态失败');
       return data['is_login'] == true;
+    } on V2BoardException catch (e) {
+      // _dio 的 validateStatus 接受所有状态码，401/403 不会抛 DioException，
+      // 而是由 _requireDataMap 转成 V2BoardException —— 必须在这里判断，
+      // 否则 token 过期会被当成网络异常（null），一直沿用旧会话。
+      if (e.statusCode == 401 || e.statusCode == 403) {
+        return false;
+      }
+      return null;
     } on DioException catch (e) {
       final status = e.response?.statusCode;
       if (status == 401 || status == 403) {
@@ -199,9 +262,9 @@ class V2BoardClient {
       options: Options(headers: {'Authorization': authData}),
     );
     final data = _requireDataMap(response, fallbackMessage: '设备注册失败');
-    if (data['active'] == false) {
-      throw const V2BoardException('设备已被限制，请联系客服');
-    }
+    // H-12：不要用 `data['active'] == false` 判断设备被限制 —— 面板的 `active`
+    // 字段是「当前接入域名」（字符串），设备禁用/超限走非 200 + 403 语义，
+    // 由 _requireDataMap 抛 V2BoardException(statusCode: 403)。
     return data;
   }
 
@@ -245,24 +308,54 @@ class V2BoardClient {
         return V2BoardHeartbeatResult(
           ok: false,
           statusCode: response.statusCode,
+          message: _rawMessage(response.data),
         );
       }
       final body = response.data;
       if (body is Map && body['data'] is Map) {
-        final interval = (body['data'] as Map)['heartbeat_interval'];
+        final data = body['data'] as Map;
+        final interval = data['heartbeat_interval'];
+        // H-08：面板可以在心跳里下发接入域名与域名池（与设备注册接口一致），
+        // 旧版面板不下发时保持现有域名配置。
+        final active = data['active']?.toString();
+        final pool = (data['domain_pool'] as List?)
+                ?.map((e) => e.toString())
+                .where((e) => e.isNotEmpty)
+                .toList() ??
+            const <String>[];
         return V2BoardHeartbeatResult(
           ok: true,
           intervalSeconds: interval is int && interval > 0 ? interval : null,
           statusCode: response.statusCode,
+          active: (active == null || active.isEmpty) ? null : active,
+          domainPool: pool,
+          message: _rawMessage(body) ?? _rawMessage(data),
         );
       }
       return V2BoardHeartbeatResult(
         ok: true,
         statusCode: response.statusCode,
+        message: _rawMessage(body),
       );
     } catch (_) {
       return const V2BoardHeartbeatResult(ok: false);
     }
+  }
+
+  /// 只取响应里的 `message`/`msg`，没有就返回 null（区别于带 fallback 的
+  /// `_extractErrorMessage`）。
+  String? _rawMessage(dynamic data) {
+    if (data is Map) {
+      final message = data['message']?.toString();
+      if (message != null && message.isNotEmpty) {
+        return message;
+      }
+      final msg = data['msg']?.toString();
+      if (msg != null && msg.isNotEmpty) {
+        return msg;
+      }
+    }
+    return null;
   }
 
   /// 上报被墙域名。注意必须带 device_id（参考实现漏传直接 400）。

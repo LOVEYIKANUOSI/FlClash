@@ -1,4 +1,3 @@
-import 'package:fl_clash/features/v2board/app_config.dart';
 import 'package:fl_clash/features/v2board/v2board_state.dart';
 import 'package:fl_clash/ui/ui.dart';
 import 'package:flutter/services.dart';
@@ -111,7 +110,8 @@ class _V2BoardLoginScreenState extends State<V2BoardLoginScreen> {
                     keyboardType: TextInputType.url,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
-                      hintText: '面板地址，例如 ${AppConfig.defaultPanelUrl}',
+                      // 源码不写真实生产入口（S-34）：只给一个明显是示例的占位符。
+                      hintText: '面板地址（例如 https://panel.example.com）',
                     ),
                   ),
                   const SizedBox(height: 16),

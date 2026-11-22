@@ -15,7 +15,7 @@ void main() {
       final store = AuthStore();
       await store.init();
       await store.save(
-        panelUrl: 'https://gettakeoff.cc',
+        panelUrl: 'https://panel.dawnpanel.net',
         email: 'a@b.com',
         authData: 'jwt-auth-data-value',
         token: 'subscribe-token-value',
@@ -87,7 +87,7 @@ void main() {
       final store = AuthStore();
       await store.init();
       await store.save(
-        panelUrl: 'https://gettakeoff.cc',
+        panelUrl: 'https://panel.dawnpanel.net',
         email: 'a@b.com',
         authData: 'jwt',
         token: 'token',

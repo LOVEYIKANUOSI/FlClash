@@ -34,17 +34,19 @@ bool get isUpdateSignatureConfigured => _publicKeyModulusHex.isNotEmpty;
 
 /// 校验 [payload] 的 RSA-SHA256 签名。
 ///
-/// 公钥未配置时返回 true（只靠 sha256），并在日志里打一次警告。
+/// **fail-closed（S-36）**：公钥未配置时返回 false，而不是「只靠 sha256 放行」。
+/// 更新包是唯一会把可执行文件装进系统的路径，公钥缺失属于构建配置错误，
+/// 宁可更新失败也不能接受未验签的安装包。
 bool verifyUpdateSignature({
   required String payload,
   required String signature,
 }) {
   if (!isUpdateSignatureConfigured) {
     commonPrint.log(
-      'Update signature skipped: public key not configured',
+      'Update signature rejected: public key not configured',
       logLevel: LogLevel.warning,
     );
-    return true;
+    return false;
   }
   if (signature.isEmpty) {
     return false;

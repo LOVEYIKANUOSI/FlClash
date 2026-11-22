@@ -94,6 +94,9 @@ class UpdateService {
   final AuthStore _authStore = AuthStore();
 
   /// 下载用独立 Dio，强制 DIRECT：安装包在下载服务器上，不走用户节点。
+  ///
+  /// S-36/S-37：安装包下载必须自己拒绝坏证书，不能受设置里的
+  /// 「校验 TLS 证书」开关影响（用户关掉全局校验时，更新通道仍要严格）。
   late final Dio _downloadDio = Dio(
     BaseOptions(
       headers: {'User-Agent': browserUa, 'Accept-Encoding': 'identity'},
@@ -102,7 +105,9 @@ class UpdateService {
       validateStatus: (status) => status != null,
     ),
   )..httpClientAdapter = IOHttpClientAdapter(
-      createHttpClient: () => HttpClient()..findProxy = ((_) => 'DIRECT'),
+      createHttpClient: () => HttpClient()
+        ..findProxy = ((_) => 'DIRECT')
+        ..badCertificateCallback = ((_, _, _) => false),
     );
 
   Timer? _autoCheckTimer;
@@ -189,6 +194,13 @@ class UpdateService {
               currentCode: currentVersionCode,
             )
             .timeout(_panelTimeout);
+      } on UpdateChannelUnsupported catch (error) {
+        // 当前平台没有面板更新通道（S-36）：不用逐个域名重试，直接 GitHub。
+        commonPrint.log(
+          'Update panel channel unsupported: $error',
+          logLevel: LogLevel.warning,
+        );
+        return UpdateClient.instance.fetchFromGitHub();
       } catch (error) {
         panelError = error;
         if (error is UpdateCheckUnauthorized) {
@@ -342,6 +354,10 @@ class UpdateService {
         throw UpdateVerifyException(
           'sha256 不匹配（期望 ${manifest.sha256}，实际 $actualSha256）',
         );
+      }
+      // S-36：面板清单必须带签名并验签通过，不再「有签名才验、没签名就跳过」。
+      if (manifest.requiresSignature && !manifest.hasSignature) {
+        throw const UpdateVerifyException('服务端清单缺少签名，已拒绝安装');
       }
       if (manifest.hasSignature &&
           !verifyUpdateSignature(
