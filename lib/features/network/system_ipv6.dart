@@ -55,18 +55,32 @@ class SystemIpv6 {
   static const _pollInterval = Duration(seconds: 2);
   static const _pollTimes = 3;
 
+  /// 检测结果缓存：`inspect()` 要起一个 PowerShell 进程（约 1s），
+  /// 后台 IPv6 探测每次都会调它，必须缓存，否则会频繁抢 CPU 造成卡顿感。
+  static const _cacheTtl = Duration(minutes: 5);
+
   bool _attempted = false;
+  SystemIpv6Status? _statusCache;
+  DateTime? _statusAt;
 
   /// 是否已经尝试过开启（每进程只跑一次）。
   bool get attempted => _attempted;
 
-  Future<SystemIpv6Status> inspect() async {
+  Future<SystemIpv6Status> inspect({bool force = false}) async {
     if (!system.isWindows) {
       return const SystemIpv6Status(
         registryDisabled: false,
         bindingEnabled: true,
         hasAdapter: true,
       );
+    }
+    final cached = _statusCache;
+    final at = _statusAt;
+    if (!force &&
+        cached != null &&
+        at != null &&
+        DateTime.now().difference(at) < _cacheTtl) {
+      return cached;
     }
     try {
       final result = await Process.run(
@@ -89,11 +103,14 @@ class SystemIpv6 {
         );
       }
       final data = jsonDecode(line) as Map<String, dynamic>;
-      return SystemIpv6Status(
+      final status = SystemIpv6Status(
         registryDisabled: data['registryDisabled'] as bool? ?? false,
         bindingEnabled: data['bindingEnabled'] as bool? ?? false,
         hasAdapter: data['hasAdapter'] as bool? ?? false,
       );
+      _statusCache = status;
+      _statusAt = DateTime.now();
+      return status;
     } catch (e) {
       return SystemIpv6Status(
         registryDisabled: false,
@@ -154,7 +171,8 @@ class SystemIpv6 {
     }
     for (var i = 0; i < _pollTimes; i++) {
       await Future<void>.delayed(_pollInterval);
-      final next = await inspect();
+      // 刚改过注册表/网卡绑定：必须跳过缓存重新检测。
+      final next = await inspect(force: true);
       if (next.enabled) {
         commonPrint.log('[IPv6] 系统 IPv6 已启用');
         return true;

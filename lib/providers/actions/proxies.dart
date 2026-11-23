@@ -390,8 +390,10 @@ class ProxiesAction extends _$ProxiesAction {
   }
 
   Future<void> _runDelayTests(List<_DelayTestBatch> batches) async {
-    // 测试节点前强制开启并检查 IPv6（产品要求，客户端不提供 IPv6 开关）。
-    await Ipv6Support.instance.ensureBeforeUse();
+    // IPv6 强制开启（产品要求）在 bootstrap / 启动内核时已经生效，这里只做
+    // 后台补充探测，不能 await：探测要连外网 IPv6（不通时会等满超时）且
+    // 系统层检查要起 PowerShell，会让「测试延迟」明显卡一下。
+    unawaited(Ipv6Support.instance.ensureBeforeUse());
     final targets = _resolveDelayTestTargets(batches);
     if (targets.isEmpty) {
       return;
