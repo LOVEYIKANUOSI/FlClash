@@ -278,6 +278,16 @@ class SetupAction extends _$SetupAction {
     ref.read(runningVpnOptionsProvider.notifier).value = running
         ? vpnOptions
         : null;
+    // 防 DNS 泄露：内核起来后把系统 DNS 指向本机内核 DNS 端口
+    // （浏览器 DNS 预取、QUIC 等不走代理的查询也会进入内核走加密 DoH）；
+    // 停止时恢复原 DNS，避免断网。
+    if (running) {
+      if (ref.read(networkSettingProvider).autoSetSystemDns) {
+        unawaited(SystemDnsProtection.instance.apply());
+      }
+    } else {
+      unawaited(SystemDnsProtection.instance.restore());
+    }
   }
 
   bool _isUnanswered(Object error) =>

@@ -1,5 +1,14 @@
 import 'package:fl_clash/enum/enum.dart';
 
+/// 是否启用「系统 DNS 接管」。默认关闭，需 `--dart-define=SYSTEM_DNS_TAKEOVER=true`。
+///
+/// 与 `SystemDnsProtection.takeoverEnabled` 必须保持一致（同一编译期常量，
+/// 放在这里是因为 `dns_protection.dart` 不能反向依赖 `features/network/`）。
+const bool systemDnsTakeoverEnabled = bool.fromEnvironment(
+  'SYSTEM_DNS_TAKEOVER',
+  defaultValue: false,
+);
+
 /// 防 DNS 泄露的默认 DNS 配置（2026-11-24）。
 ///
 /// 背景：FlClash 之前把 DNS 交给机场订阅里的明文 DNS（`223.5.5.5` 之类），
@@ -75,6 +84,13 @@ Map<String, dynamic> applyDnsLeakProtection({
   final result = Map<String, dynamic>.from(dns);
   result['enable'] = true;
   result['enhanced-mode'] = 'fake-ip';
+  // 只有启用「系统 DNS 接管」时才让内核对 loopback 53 监听（系统 DNS 指向
+  // 127.0.0.1 后，浏览器预取等不走代理的查询才会进入内核）；接管默认关闭
+  // （2026-11-24 强杀断网事故），此时不占 53 端口，避免和别的软件抢端口。
+  if (systemDnsTakeoverEnabled) {
+    // 不用 0.0.0.0 是因为本机 UDP 53 常被 Windows ICS 占用；loopback 仍可绑。
+    result['listen'] = '127.0.0.1:53';
+  }
   // DNS 查询遵守路由规则：国外 DoH 会经代理发出，而不是直连本地网络。
   result['respect-rules'] = true;
   result['default-nameserver'] = _bootstrapServers;

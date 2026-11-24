@@ -11,6 +11,7 @@ import 'package:fl_clash/common/window.dart';
 import 'package:fl_clash/database/database.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/features/network/ipv6_support.dart';
+import 'package:fl_clash/features/network/system_dns.dart';
 import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
@@ -159,6 +160,9 @@ class Bootstrap {
     // IPv6 强制开启（产品要求，客户端不提供开关）。
     Ipv6Support.instance.enforce();
     Ipv6Support.instance.logElevation();
+    // 系统 DNS 接管自愈：上次被强杀/崩溃可能把系统 DNS 留在 127.0.0.1 而
+    // 内核已不在 → 全机解析失败。这里检测到该组合就恢复 DHCP。
+    unawaited(SystemDnsProtection.instance.recoverIfStale());
     unawaited(_container.read(systemActionProvider.notifier).updateTray());
     unawaited(
       _container.read(profilesActionProvider.notifier).autoUpdateProfiles(),

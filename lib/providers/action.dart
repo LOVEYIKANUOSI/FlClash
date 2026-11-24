@@ -13,6 +13,7 @@ import 'package:fl_clash/core/v2board_profile.dart';
 import 'package:fl_clash/database/database.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/features/network/ipv6_support.dart';
+import 'package:fl_clash/features/network/system_dns.dart';
 import 'package:fl_clash/features/v2board/app_config.dart';
 import 'package:fl_clash/features/v2board/auth_store.dart';
 import 'package:fl_clash/features/v2board/subscribe_cipher.dart';
