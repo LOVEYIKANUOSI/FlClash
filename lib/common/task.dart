@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:fl_clash/common/common.dart';
+import 'package:fl_clash/common/dns_protection.dart';
 import 'package:fl_clash/common/mitm_module.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
@@ -379,6 +380,14 @@ Future<RealProfile> _makeRealProfileTask(MakeRealProfileState data) async {
         .map((item) => item.definition)
         .toList();
   }
+  // 防 DNS 泄露：只在 profile 没有提供加密 DNS 时才替换
+  // （明文 DNS 会让查询暴露给本地网络）。
+  rawConfig['dns'] = applyDnsLeakProtection(
+    dns: rawConfig['dns'] is Map
+        ? Map<String, dynamic>.from(rawConfig['dns'] as Map)
+        : <String, dynamic>{},
+    overriddenKeys: overrides.dnsOverrideKeys,
+  );
   rawConfig['rules'] = [...mitm.rules, ...rules];
   final yaml = await _encodeYaml(Map<String, dynamic>.from(rawConfig));
   return (yaml: yaml, md5: yaml.toMd5(), counts: configCountsOf(rawConfig));
